@@ -1,12 +1,15 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { ShiftRecord } from '../types';
+import type { ShiftRecord, TaskObject, ActivityObject } from '../types';
 
 import { type IngestionSummary } from '../types';
 
 interface WorkerResult {
-    type: 'SUCCESS' | 'ERROR';
+    type: 'SUCCESS' | 'ERROR' | 'PROGRESS';
     data?: ShiftRecord[];
+    taskObjects?: TaskObject[]; // New
+    activityObjects?: ActivityObject[]; // New
     summary?: IngestionSummary;
+    processed?: number;
     message?: string;
 }
 
@@ -15,8 +18,11 @@ import FileProcessingWorker from '../workers/file-processing.worker?worker&inlin
 export function useFileIngestion() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [data, setData] = useState<ShiftRecord[]>([]);
+    const [taskObjects, setTaskObjects] = useState<TaskObject[]>([]); // New
+    const [activityObjects, setActivityObjects] = useState<ActivityObject[]>([]); // New
     const [summary, setSummary] = useState<IngestionSummary | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [progress, setProgress] = useState(0);
 
     const workerRef = useRef<Worker | null>(null);
 
@@ -28,12 +34,18 @@ export function useFileIngestion() {
             const result = e.data;
             if (result.type === 'SUCCESS' && result.data) {
                 setData(result.data);
+                setTaskObjects(result.taskObjects || []); // New
+                setActivityObjects(result.activityObjects || []); // New
                 setSummary(result.summary || null);
                 setError(null);
+                setIsProcessing(false);
+            } else if (result.type === 'PROGRESS' && result.processed) {
+                setProgress(result.processed);
+                return; // Don't stop processing
             } else if (result.type === 'ERROR') {
                 setError(result.message || 'Unknown worker error');
+                setIsProcessing(false);
             }
-            setIsProcessing(false);
         };
 
         return () => {
@@ -47,11 +59,14 @@ export function useFileIngestion() {
         setIsProcessing(true);
         setError(null);
         setSummary(null);
+        setProgress(0);
         setData([]);
+        setTaskObjects([]);
+        setActivityObjects([]);
 
         // Send files to worker
         workerRef.current.postMessage(files);
     }, []);
 
-    return { processFiles, isProcessing, data, summary, error };
+    return { processFiles, isProcessing, data, taskObjects, activityObjects, summary, error, progress };
 }

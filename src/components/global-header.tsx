@@ -1,23 +1,21 @@
-
-import { FileText, Filter, X, Bot } from 'lucide-react';
+import { Filter, X, Bot, TrendingUp, FileSpreadsheet, ChevronDown } from 'lucide-react';
 
 interface GlobalHeaderProps {
     title: string;
     taskCount: number;
     secondaryTaskCount?: number;
 
+    // Files & Benchmark
+    allFiles: string[];
+    activeFile: string | null;
+    onFileChange: (file: string) => void;
+    benchmarkFile: string | null;
+    onBenchmarkChange: (file: string | null) => void;
+
     // Filters
     clients: string[];
-    jobTypes: string[];
-    taskTypes: string[];
-
     selectedClient: string;
-    selectedJobType: string;
-    selectedTaskType: string;
-
     onClientChange: (val: string) => void;
-    onJobTypeChange: (val: string) => void;
-    onTaskTypeChange: (val: string) => void;
     onClearData: () => void;
 
     isBenchmark?: boolean;
@@ -26,122 +24,101 @@ interface GlobalHeaderProps {
 
 export function GlobalHeader({
     title,
-    taskCount,
-    secondaryTaskCount,
+    // taskCount, // Not used in new design explicitly or used differently
+    // secondaryTaskCount,
+    allFiles,
+    activeFile,
+    onFileChange,
+    benchmarkFile,
+    onBenchmarkChange,
     clients,
-    jobTypes,
-    taskTypes,
     selectedClient,
-    selectedJobType,
-    selectedTaskType,
     onClientChange,
-    onJobTypeChange,
-    onTaskTypeChange,
     onClearData,
     onExportContext
 }: GlobalHeaderProps) {
 
-    const Select = ({
-        label,
-        value,
-        options,
-        onChange
-    }: {
-        label: string;
-        value: string;
-        options: string[];
-        onChange: (v: string) => void
-    }) => (
-        <div className="flex items-center gap-2 group">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide group-hover:text-slate-700 transition-colors">{label}:</span>
-            <div className="relative">
-                <select
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    className="appearance-none pl-3 pr-8 py-1.5 text-xs font-medium text-slate-700 bg-white/50 border border-white/60 rounded-xl shadow-sm backdrop-blur-sm hover:bg-white/80 focus:ring-2 focus:ring-blue-400/50 outline-none transition-all cursor-pointer"
-                >
-                    <option value="ALL">All {label}s</option>
-                    {options.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                </select>
-                {/* Custom Chevron */}
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                </div>
-            </div>
-        </div>
-    );
-
     return (
-        <header className="relative z-50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 p-6 pb-2 mb-2 animate-in slide-in-from-top-4 duration-700">
-            {/* Left: Title & Info */}
-            <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/20 text-white">
-                        <FileText className="w-5 h-5" />
+        <header className="sticky top-0 z-40 bg-white dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex-shrink-0 transition-colors duration-200">
+            <div className="px-6 py-3 flex items-center justify-between">
+
+                {/* Left: File Selection & Comparison */}
+                <div className="flex items-center space-x-3">
+                    {/* Primary File */}
+                    <div className="relative group">
+                        <div className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-100 dark:border-blue-800 hover:border-blue-300 transition-colors relative">
+                            <FileSpreadsheet className="text-blue-600 dark:text-blue-400 w-4 h-4" />
+                            <select
+                                value={activeFile || ''}
+                                onChange={(e) => onFileChange(e.target.value)}
+                                className="appearance-none bg-transparent border-none text-[11px] font-medium text-gray-700 dark:text-gray-200 focus:ring-0 cursor-pointer pr-4 w-32 truncate"
+                            >
+                                {allFiles.map(f => (
+                                    <option key={f} value={f}>{f}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-2 text-gray-500 w-4 h-4 pointer-events-none" />
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Active Session</h2>
-                        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600 drop-shadow-sm">
-                            {title}
-                        </h1>
+
+                    <span className="text-gray-300 text-[10px] font-medium">vs</span>
+
+                    {/* Benchmark File */}
+                    <div className="relative group">
+                        <div className="flex items-center space-x-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 transition-colors text-gray-500 dark:text-gray-400 relative">
+                            <TrendingUp className="w-3.5 h-3.5" />
+                            <select
+                                value={benchmarkFile || ''}
+                                onChange={(e) => onBenchmarkChange(e.target.value || null)}
+                                className="appearance-none bg-transparent border-none text-[11px] font-medium focus:ring-0 cursor-pointer pr-4 w-32 truncate"
+                            >
+                                <option value="">None</option>
+                                {allFiles.filter(f => f !== activeFile).map(fname => (
+                                    <option key={fname} value={fname}>{fname}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-2 text-gray-400 w-4 h-4 pointer-events-none" />
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2 ml-[52px]">
-                    <span className="px-3 py-1 rounded-full bg-white/40 border border-white/60 text-xs text-slate-600 font-medium backdrop-blur-md shadow-sm">
-                        {taskCount.toLocaleString()} tasks
-                    </span>
-                    {secondaryTaskCount !== undefined && (
-                        <span className="px-3 py-1 rounded-full bg-purple-50/40 border border-purple-100/60 text-xs text-purple-600 font-medium backdrop-blur-md shadow-sm">
-                            {secondaryTaskCount.toLocaleString()} secondary
-                        </span>
-                    )}
+                {/* Right: Filters & Actions */}
+                <div className="flex items-center bg-white dark:bg-surface-dark rounded-full border border-gray-200 dark:border-gray-700 shadow-sm px-1 py-1">
+                    {/* Client Filter */}
+                    <div className="flex items-center px-3 space-x-1 border-r border-transparent">
+                        <div className="relative flex items-center">
+                            <Filter className="w-3.5 h-3.5 text-gray-500 mr-2" />
+                            <select
+                                value={selectedClient}
+                                onChange={(e) => onClientChange(e.target.value)}
+                                className="appearance-none bg-transparent text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 px-2 py-1 rounded cursor-pointer focus:ring-0 border-none pr-6"
+                            >
+                                <option value="ALL">All Clients</option>
+                                {clients.map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-0 text-gray-400 w-3.5 h-3.5 pointer-events-none" />
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="pl-2 pr-2 border-l border-gray-200 dark:border-gray-700 h-6 flex items-center">
+                        <button
+                            onClick={onClearData}
+                            className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex items-center mr-3 uppercase font-semibold tracking-wide"
+                        >
+                            <X className="w-3.5 h-3.5 mr-0.5" /> Clear
+                        </button>
+
+                        <button
+                            onClick={onExportContext}
+                            className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 px-2.5 py-1 rounded text-[10px] font-bold flex items-center hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors uppercase tracking-wide"
+                        >
+                            <Bot className="w-3.5 h-3.5 mr-1" /> AI Export
+                        </button>
+                    </div>
                 </div>
-            </div>
-
-            {/* Right: Filters & Actions */}
-            <div className="flex flex-wrap items-center gap-4 bg-white/30 p-2 pr-6 rounded-2xl border border-white/50 backdrop-blur-md shadow-[0_8px_32px_0_rgba(31,38,135,0.05)]">
-                <div className="flex items-center gap-2 px-3 py-1 border-r border-slate-200/50">
-                    <Filter className="w-4 h-4 text-slate-400" />
-                    <span className="text-xs font-semibold text-slate-500">FILTERS</span>
-                </div>
-
-                {clients.length > 0 && (
-                    <Select label="Client" value={selectedClient} options={clients} onChange={onClientChange} />
-                )}
-
-                {jobTypes.length > 0 && (
-                    <Select label="Job Type" value={selectedJobType} options={jobTypes} onChange={onJobTypeChange} />
-                )}
-
-                {taskTypes.length > 0 && (
-                    <Select label="Task Type" value={selectedTaskType} options={taskTypes} onChange={onTaskTypeChange} />
-                )}
-
-                <div className="h-6 w-px bg-slate-200/50 mx-2"></div>
-
-                <button
-                    onClick={onClearData}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors group"
-                >
-                    <X className="w-3.5 h-3.5 group-hover:rotate-90 transition-transform" />
-                    Clear Data
-                </button>
-
-                <div className="h-6 w-px bg-slate-200/50 mx-2"></div>
-
-                <button
-                    onClick={onExportContext}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors shadow-sm"
-                    title="Export context for AI interpretation"
-                >
-                    <Bot className="w-3.5 h-3.5" />
-                    AI Export
-                </button>
             </div>
         </header>
     );

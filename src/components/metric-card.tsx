@@ -1,6 +1,8 @@
 import { type ReactNode } from 'react';
 import { cn } from '../lib/utils';
-import { ArrowUpRight, ArrowDownRight, Minus, Info } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+import React from 'react';
+import { RichTooltip } from './rich-tooltip';
 
 interface MetricCardProps {
     title: string;
@@ -12,18 +14,19 @@ interface MetricCardProps {
         isPositiveGood: boolean;
     };
     benchmarkValue?: string | number;
-    tooltip?: string;
+    tooltip?: React.ReactNode;
     className?: string;
     colorClass?: string; // e.g. "from-blue-500 to-indigo-600"
     onClick?: () => void;
+    suffix?: string;
 }
 
-export function MetricCard({ title, value, subValue, icon, trend, benchmarkValue, tooltip, className, colorClass = "from-slate-500 to-slate-700", onClick }: MetricCardProps) {
+export function MetricCard({ title, value, subValue, icon, trend, benchmarkValue, tooltip, className, colorClass = "from-slate-500 to-slate-700", onClick, suffix }: MetricCardProps) {
     return (
         <div
             onClick={onClick}
             className={cn(
-                "relative overflow-hidden rounded-3xl border border-white/60 bg-white/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] group transition-all duration-300",
+                "relative rounded-3xl border border-white/60 bg-white/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] group transition-all duration-300 hover:z-50",
                 onClick ? "cursor-pointer hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.2)] hover:-translate-y-1 active:scale-[0.98]" : "hover:-translate-y-1",
                 className
             )}
@@ -34,21 +37,18 @@ export function MetricCard({ title, value, subValue, icon, trend, benchmarkValue
                 </div>
 
                 {tooltip && (
-                    <div className="group/tooltip relative bg-white/50 p-1.5 rounded-full cursor-help hover:bg-white/80 transition-colors">
-                        <Info className="w-4 h-4 text-slate-500" />
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-800/95 text-white text-xs rounded-xl shadow-xl backdrop-blur-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-50 pointer-events-none text-center leading-relaxed border border-white/10">
-                            {tooltip}
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800/95"></div>
-                        </div>
+                    <div className="relative z-[60]">
+                        <RichTooltip content={tooltip} />
                     </div>
                 )}
             </div>
 
             <h3 className="text-slate-500 text-sm font-medium mb-1">{title}</h3>
 
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-baseline gap-1">
                 <span className="text-3xl font-bold text-slate-800 tracking-tight">{value}</span>
-                {subValue && <span className="text-xs text-slate-400 font-medium">{subValue}</span>}
+                {suffix && <span className="text-sm font-medium text-slate-500 mb-1">{suffix}</span>}
+                {subValue && <span className="text-xs text-slate-400 font-medium ml-1">{subValue}</span>}
             </div>
 
             {trend && (

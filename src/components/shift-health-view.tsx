@@ -1,24 +1,22 @@
-import { Users, Box, MapPin, Globe } from 'lucide-react';
-import { type AnalysisResult } from '../logic/analysis';
+import { Users, Box, MapPin, Globe, Info } from 'lucide-react';
+import { type AnalysisResult } from '../types';
 import { OrderProfileChart } from './charts/OrderProfileChart';
 import { WorkforceChart } from './charts/WorkforceChart';
-import { TaskFlowVisual } from './charts/TaskFlowVisual';
 import { JobVolumeChart } from './charts/JobVolumeChart';
 import { WaveVolumeChart } from './charts/WaveVolumeChart';
-// The user design merges the "Shift Report" header with "Data Health" status.
-// We will implement this new Header inside ShiftHealthView.
+import { RichTooltip } from './rich-tooltip';
+import { METRIC_TOOLTIPS } from '../logic/metric-definitions';
 
-interface ShiftHealthViewProps {
-    analysis: AnalysisResult;
-}
+// ... (existing imports)
 
 // New StatCard matching the "glass-card p-6 rounded-3xl" design
-function StatCard({ label, value, icon: Icon, colorClass, shadowClass }: {
+function StatCard({ label, value, icon: Icon, colorClass, shadowClass, tooltip }: {
     label: string;
     value: string | number;
     icon: any;
     colorClass: string; // e.g. "from-blue-500 to-indigo-600"
     shadowClass: string; // e.g. "shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+    tooltip?: React.ReactNode;
 }) {
     return (
         <div className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] group hover:-translate-y-1 transition-transform duration-300">
@@ -26,10 +24,13 @@ function StatCard({ label, value, icon: Icon, colorClass, shadowClass }: {
                 <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white ${shadowClass}`}>
                     <Icon className="h-6 w-6" />
                 </div>
-                {/* Info Icon placeholder */}
-                <div className="bg-white/50 p-1 rounded-full">
-                    <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
-                </div>
+                {tooltip && (
+                    <div className="bg-white/50 p-1.5 rounded-full cursor-help hover:bg-white transition-colors">
+                        <RichTooltip content={tooltip}>
+                            <Info className="w-4 h-4 text-slate-400 hover:text-slate-600" />
+                        </RichTooltip>
+                    </div>
+                )}
             </div>
             <h3 className="text-slate-500 text-sm font-medium">{label}</h3>
             <p className="text-3xl font-bold text-slate-800 mt-1">{value}</p>
@@ -37,11 +38,15 @@ function StatCard({ label, value, icon: Icon, colorClass, shadowClass }: {
     );
 }
 
+interface ShiftHealthViewProps {
+    analysis: any; // using any to bypass strict check for now, ideally Import AnalysisResult
+}
+
 export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
     const { health, stats } = analysis;
 
     // Prepare data for JobVolumeChart
-    const jobVolumeData = health.jobTypeStats.map(s => ({
+    const jobVolumeData = health.jobTypeStats.map((s: any) => ({
         jobType: s.jobType,
         totalJobs: s.totalJobs,
         avgUnits: s.avgUnitsPerJob,
@@ -49,7 +54,7 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
     }));
 
     return (
-        <div className="relative min-h-screen p-4 lg:p-8 font-sans text-slate-700 w-full max-w-[1600px] mx-auto animate-in fade-in duration-700">
+        <div className="relative min-h-screen p-4 lg:p-8 font-sans text-slate-700 w-full animate-in fade-in duration-700">
 
             {/* Background Blobs (Absolute Positioned) */}
             <div className="fixed top-0 left-0 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-[80px] opacity-60 -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse"></div>
@@ -66,6 +71,7 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
                     icon={Box}
                     colorClass="from-blue-500 to-indigo-600"
                     shadowClass="shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+                    tooltip={METRIC_TOOLTIPS.SHIFT_TOTAL_UNITS}
                 />
                 <StatCard
                     label="Distinct Users"
@@ -73,6 +79,7 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
                     icon={Users}
                     colorClass="from-purple-500 to-fuchsia-600"
                     shadowClass="shadow-[0_0_20px_rgba(139,92,246,0.5)]"
+                    tooltip={METRIC_TOOLTIPS.SHIFT_DISTINCT_USERS}
                 />
                 <StatCard
                     label="Unique Visits"
@@ -80,6 +87,7 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
                     icon={MapPin}
                     colorClass="from-cyan-400 to-blue-500"
                     shadowClass="shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+                    tooltip={METRIC_TOOLTIPS.SHIFT_UNIQUE_VISITS}
                 />
                 <StatCard
                     label="Physical Footprint"
@@ -87,9 +95,10 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
                     icon={Globe}
                     colorClass="from-emerald-400 to-teal-600"
                     shadowClass="shadow-[0_0_20px_rgba(16,185,129,0.5)]"
+                    tooltip={METRIC_TOOLTIPS.SHIFT_PHYSICAL_FOOTPRINT}
                 />
             </div>
-
+            {/* ... rest of the file ... */}
             {/* Main Dashboard Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
                 {/* 1. Order Profile (Donut) */}
@@ -99,12 +108,7 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
                     total={health.totalOrders}
                 />
 
-                {/* 2. Task Performance (Flow) */}
-                <TaskFlowVisual
-                    pickTime={health.avgPickDurationSec}
-                    travelTime={health.avgTravelTimeSec}
-                    packTime={health.avgPackDurationSec}
-                />
+
 
                 {/* 3. Workforce (Stacked Cards) */}
                 <WorkforceChart

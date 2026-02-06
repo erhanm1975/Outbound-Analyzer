@@ -10,4 +10,9 @@ export default defineConfig({
     tailwindcss(),
     viteSingleFile(),
   ],
+  server: {
+    host: true, // Listen on all local IPs
+    port: 4000,
+    strictPort: true, // Fail if port 4000 is already in use
+  },
 })

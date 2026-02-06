@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { type JobCodeStats } from '../types';
 import { Search, ArrowUpDown, ArrowUp, ArrowDown, Filter, Bot } from 'lucide-react';
+import { RichTooltip } from './rich-tooltip';
+import { METRIC_TOOLTIPS } from '../logic/metric-definitions';
 
 interface JobBreakdownViewProps {
     stats: JobCodeStats[];
@@ -121,14 +123,23 @@ export function JobBreakdownView({ stats }: JobBreakdownViewProps) {
             : <ArrowDown className="w-3 h-3 text-blue-600" />;
     };
 
-    const Th = ({ field, label, align = 'left', width }: { field: SortField | 'ai', label: string, align?: 'left' | 'right' | 'center', width?: string }) => (
+
+
+    // ... (existing imports)
+
+    // ... (existing code)
+
+    const Th = ({ field, label, align = 'left', width, tooltip }: { field: SortField | 'ai', label: string, align?: 'left' | 'right' | 'center', width?: string, tooltip?: React.ReactNode }) => (
         <th
             className={`px-4 py-3 bg-white/85 backdrop-blur-xl border-b border-white/50 cursor-pointer hover:bg-white/95 transition-colors group select-none sticky top-0 z-20 ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}`}
             style={{ width }}
             onClick={() => field !== 'ai' ? handleSort(field as SortField) : handleSort('isAI')}
         >
             <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : ''}`}>
-                <span className="font-semibold text-xs text-slate-600 uppercase tracking-wider">{label}</span>
+                <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-xs text-slate-600 uppercase tracking-wider">{label}</span>
+                    {tooltip && <RichTooltip content={tooltip} />}
+                </div>
                 <SortIcon field={field === 'ai' ? 'isAI' : field as SortField} />
             </div>
         </th>
@@ -137,31 +148,7 @@ export function JobBreakdownView({ stats }: JobBreakdownViewProps) {
     return (
         <div className="flex flex-col h-full bg-transparent p-0 space-y-4">
             {/* Header Area */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        Job Breakdown
-                        {activeFilterCount > 0 && (
-                            <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                                {activeFilterCount} active filters
-                            </span>
-                        )}
-                    </h2>
-                    <p className="text-slate-500 text-sm mt-0.5">
-                        Deep dive into individual job performance and composition.
-                    </p>
-                </div>
-
-                {activeFilterCount > 0 && (
-                    <button
-                        onClick={clearFilters}
-                        className="text-sm text-slate-500 hover:text-rose-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white/50 transition-colors border border-transparent hover:border-rose-200"
-                    >
-                        <Filter className="w-3 h-3" />
-                        Reset Filters
-                    </button>
-                )}
-            </div>
+            {/* ... */}
 
             {/* Data Grid */}
             <div className="flex-1 bg-white/40 backdrop-blur-md border border-white/60 rounded-3xl shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] overflow-hidden flex flex-col">
@@ -170,13 +157,13 @@ export function JobBreakdownView({ stats }: JobBreakdownViewProps) {
                         {/* 1. Header Row */}
                         <thead>
                             <tr>
-                                <Th field="jobCode" label="Job Code" />
-                                <Th field="jobType" label="Type" />
-                                <Th field="ai" label="Source" align="center" width="80px" />
-                                <Th field="totalOrders" label="Orders" align="right" />
-                                <Th field="totalLocations" label="Locs" align="right" />
-                                <Th field="totalSkus" label="SKUs" align="right" />
-                                <Th field="totalUnits" label="Units" align="right" />
+                                <Th field="jobCode" label="Job Code" tooltip={METRIC_TOOLTIPS.COL_JOB_CODE} />
+                                <Th field="jobType" label="Type" tooltip={METRIC_TOOLTIPS.COL_JOB_TYPE} />
+                                <Th field="ai" label="Source" align="center" width="80px" tooltip={METRIC_TOOLTIPS.COL_SOURCE} />
+                                <Th field="totalOrders" label="Orders" align="right" tooltip={METRIC_TOOLTIPS.COL_ORDERS} />
+                                <Th field="totalLocations" label="Locs" align="right" tooltip={METRIC_TOOLTIPS.COL_LOCATIONS} />
+                                <Th field="totalSkus" label="SKUs" align="right" tooltip={METRIC_TOOLTIPS.COL_SKUS} />
+                                <Th field="totalUnits" label="Units" align="right" tooltip={METRIC_TOOLTIPS.COL_UNITS} />
                             </tr>
 
                             {/* 2. Filter Row - Manually Sticky below Header */}

@@ -44,19 +44,57 @@ export interface BufferConfig {
     intraJobBuffer: number; // minutes
     jobTransitionBuffer: number; // minutes
     alertThreshold: number; // minutes
+    isIntraJobBufferAutoCalculated?: boolean; // Track if auto-calculated vs manual override
+    is2DLayoutUsed?: boolean;
+
+    isEngineeredStandardsUsed?: boolean;
+    flowBucketInterval?: number; // default 10
+    flowExcludeEmpty?: boolean; // default true
+    flowCalculationMethod?: 'interval' | 'user_daily_average'; // default 'interval'
 }
 
-export const DEFAULT_CONFIG: BufferConfig = {
-    intraJobBuffer: 2,
-    jobTransitionBuffer: 8,
+export interface JobTimingMetrics {
+    // Inter-job gap (downtime between jobs)
+    avgInterJobGapMin: number;
+    medianInterJobGapMin: number;
+    p90InterJobGapMin: number;
+
+    // Job cycle time (frequency - time between job starts)
+    avgCycleTimeMin: number;
+    medianCycleTimeMin: number;
+    p90CycleTimeMin: number;
+
+    // Job duration (time to complete)
+    avgJobDurationMin: number;
+    medianJobDurationMin: number;
+    p90JobDurationMin: number;
+
+    // Metadata
+    totalJobsAnalyzed: number;
+    outliersExcluded: number;
+}
+
+export const DEFAULT_BUFFER_CONFIG: BufferConfig = {
+    intraJobBuffer: 0, // Gap = Interruption (WMS is contiguous)
+    jobTransitionBuffer: 0, // Gap = Interruption
     alertThreshold: 10,
+    flowBucketInterval: 10,
+    flowExcludeEmpty: true,
+    flowCalculationMethod: 'interval'
 };
+
+export const DEFAULT_CONFIG = DEFAULT_BUFFER_CONFIG;
+
+
 
 export interface EnrichedShiftRecord extends ShiftRecord {
     rawGap: number; // minutes
     netGap: number; // minutes
     gapType: 'INTRA_JOB' | 'TRANSITION' | 'FIRST_TASK' | 'OVERLAP' | 'IGNORED';
     isAnomaly: boolean;
+    processTimeSec?: number; // GSPT
+    travelTimeSec?: number; // GSPT
+    interJobGapSec?: number; // Init/Finalize
 }
 
 export interface TelemetryLog {
@@ -71,13 +109,33 @@ export interface ProcessStats {
     uph: number;
     uphPure: number;
     uphHourlyFlow: number;
+    dynamicIntervalUPH: number; // NEW: 15-min bucket flow
+    flowDetails?: FlowDetailData; // NEW: Detailed breakdown
     tph: number;
     utilization: number;
     totalVolume: number;
     totalActiveTime: number; // hours (Shift Span)
     directTime: number; // minutes
     distinctLocations: number;
+    totalTasks: number;
     locationsPerUnit: number;
+    avgTaskDuration: number;
+    avgProcessTimeSec: number; // NEW
+    avgTravelTimeSec: number; // NEW
+}
+
+export interface FlowDetailData {
+    intervals: IntervalData[];
+    allUsers: string[];
+}
+
+export interface IntervalData {
+    intervalStart: Date;
+    intervalEnd: Date;
+    volume: number;
+    activeUserCount: number;
+    rate: number; // Annualized UPH for this interval
+    users: Record<string, number>; // User -> Volume map
 }
 
 export interface AggregatedStats {
@@ -86,6 +144,7 @@ export interface AggregatedStats {
     uphPure: number;
     uphHourlyFlow: number;
     picking: ProcessStats;
+    sorting: ProcessStats;
     packing: ProcessStats;
     tph: number;
     utilization: number;
@@ -123,11 +182,27 @@ export interface HealthStats {
     avgJobTransitionMin: number;
     avgTravelTimeSec: number; // "Walking Speed" proxy (mean gap time)
 
+    // Job-Level Statistics
+    totalJobs: number;
+    avgUnitsPerJob: number;
+    avgSkusPerJob: number;
+    avgLocationsPerJob: number;
+    avgOrdersPerJob: number;
+    avgTasksPerJob: number;
+
     // New Tables Data
     jobCodeStats: JobCodeStats[];
     jobTypeStats: JobTypeStats[];
     taskTypeStats: TaskTypeStats[];
     waveStats: WaveStats[]; // NEW
+    taskDurationAudit?: any[]; // For now to avoid strict typing issues, or define proper type
+}
+
+export interface AdvancedMetrics {
+    transitionFriction: number;
+    pickToPackSyncMin: number;
+    activeScanRatio: number;
+    skuBatchability: number;
 }
 
 export interface JobCodeStats {
@@ -178,6 +253,95 @@ export interface IngestionSummary {
 export interface WorkerResult {
     type: 'SUCCESS' | 'ERROR';
     data?: EnrichedShiftRecord[]; // We might parse simply ShiftRecord first
+    taskObjects?: TaskObject[]; // NEW
+    activityObjects?: ActivityObject[]; // NEW
     summary?: IngestionSummary;
     message?: string;
+}
+
+// ----------------------------------------------------------------------
+// NEW: Warehouse Productivity Logic Types
+// ----------------------------------------------------------------------
+
+export interface TaskObject {
+    User: string;
+    Client: string;
+    SKU: string;
+    Location: string;
+    Zone: string;
+    Quantity: number;
+    JobCode: string;
+    OrderCode: string; // NEW: For unique order counting
+    TaskType: string;
+    Start: Date;
+    Finish: Date;
+
+    // Core Metrics
+    ProductiveDurationSec: number;
+    TaskDirectTimeSec: number;
+    TaskTravelTimeSec: number;
+    UnproductiveDurationSec: number;
+    TotalUnits: number;
+
+    // Process Metadata
+    IsBatchNormalized: boolean;
+    OriginalDurationSec: number;
+    BatchSize: number;
+}
+
+export interface ActivityObject {
+    id: string; // Unique ID for UI/Grid keys
+    User: string;
+    Activity: string; // "Pick|Sort", "No Activity", "Break"
+    JobCode: string | null;
+    Start: Date;
+    Finish: Date;
+
+    // Aggregates
+    ProductiveDurationSec: number;
+    TaskDirectTimeSec: number;
+    TaskTravelTimeSec: number;
+    UnproductiveDurationSec: number;
+
+    NofOrders: number;
+    NofTasks: number;
+    NofUnits: number;
+
+    AvgTaskDurationSec: number;
+    AvgTravelDurationSec: number;
+}
+
+// ----------------------------------------------------------------------
+// User Performance Types
+// ----------------------------------------------------------------------
+
+export interface UserPerformanceStats {
+    user: string;
+    totalVolume: number;
+    totalTimeHours?: number; // mapped to totalShiftSpan
+    uph: number;
+    activeTimeHours?: number; // mapped to directTime
+    utilization: number;
+    shiftStart?: Date;
+    shiftEnd?: Date;
+    rank: number;
+    // Usage in analysis.ts
+    totalShiftSpan: number;
+    directTime: number;
+
+}
+
+export interface AnalysisResult {
+    records: EnrichedShiftRecord[];
+    stats: AggregatedStats;
+    health: HealthStats;
+    roleDiagnostics?: {
+        pickers: { user: string; reason: string }[];
+        packers: { user: string; reason: string }[];
+    };
+    telemetry: TelemetryLog[];
+    userPerformance: UserPerformanceStats[];
+    jobTimingMetrics: JobTimingMetrics;
+    overallHealth?: any;
+    advanced: AdvancedMetrics; // Added based on usage
 }

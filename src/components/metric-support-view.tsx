@@ -1,15 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { type ShiftRecord } from '../types';
-import { ArrowLeft, Table, CheckSquare, Zap, Clock, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Table, CheckSquare, Zap, Clock, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { format, differenceInMinutes } from 'date-fns';
+
+import { TaskDurationAuditTable } from './tables/TaskDurationAuditTable';
+import type { AnalysisResult } from '../types';
 
 interface MetricSupportViewProps {
     data: ShiftRecord[];
     metric: string;
     onBack: () => void;
+    benchmarkData?: ShiftRecord[];  // Optional benchmark records for comparison
+    isBenchmark?: boolean;          // Flag indicating benchmark mode is active
+    stats?: AnalysisResult | null;
 }
 
-export function MetricSupportView({ data, metric, onBack }: MetricSupportViewProps) {
+export function MetricSupportView({ data, metric, onBack, benchmarkData, isBenchmark = false, stats }: MetricSupportViewProps) {
+
+    // Debug Log
+    // console.log('MetricSupportView Stats:', stats);
 
     // State for view controls
     const [pickingUnitsViewMode, setPickingUnitsViewMode] = useState<'date' | 'user'>('date');
@@ -28,6 +37,18 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
     const [pickingUtilizationDateFilter, setPickingUtilizationDateFilter] = useState<string | null>(null);
     const [packingUtilizationViewMode, setPackingUtilizationViewMode] = useState<'date' | 'user'>('date');
     const [packingUtilizationDateFilter, setPackingUtilizationDateFilter] = useState<string | null>(null);
+
+    // Reset all date filters when data changes (e.g., when switching files)
+    useEffect(() => {
+        setPickingUnitsDateFilter(null);
+        setPickingTimeDateFilter(null);
+        setPickingSpanDateFilter(null);
+        setPackingUnitsDateFilter(null);
+        setPackingTimeDateFilter(null);
+        setPackingSpanDateFilter(null);
+        setPickingUtilizationDateFilter(null);
+        setPackingUtilizationDateFilter(null);
+    }, [data]);
 
     // Helper: Matrix Generator
     const generateMatrix = (subset: ShiftRecord[], valueExtractor: (d: ShiftRecord) => number) => {
@@ -78,7 +99,7 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
             return sum;
         });
 
-        const grandTotal = rows.reduce((sum, r) => sum + r.total, 0);
+
         const totalRowAverage = roundedHours.length > 0 ? (columnTotals.reduce((a, b) => a + b, 0) / roundedHours.length) : 0;
 
         return {
@@ -186,7 +207,7 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
             return sum;
         });
 
-        const grandTotal = rows.reduce((sum, r) => sum + r.total, 0);
+
         const totalRowAverage = roundedHours.length > 0 ? (columnTotals.reduce((a, b) => a + b, 0) / roundedHours.length) : 0;
 
         return { columns: roundedHours, rows, columnTotals, totalRowAverage };
@@ -324,8 +345,8 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
         const pkUnits = generateMatrix(packingData, d => d.Quantity);
 
         // Tasks
-        const pTasks = generateMatrix(pickingData, d => 1);
-        const pkTasks = generateMatrix(packingData, d => 1);
+        const pTasks = generateMatrix(pickingData, _ => 1);
+        const pkTasks = generateMatrix(packingData, _ => 1);
 
         // Time Matrix (Sum of Minutes - PURE ACTIVE)
         const pTime = generateMatrix(pickingData, d => Math.max(0, differenceInMinutes(d.Finish, d.Start)));
@@ -360,6 +381,49 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
         };
     }, [data, metric]);
 
+    // Generate benchmark matrices (only when benchmarkData exists)
+    const benchmarkMatrices = useMemo(() => {
+        if (!benchmarkData) return null;
+
+        // A. Filter Scopes
+        const pickingData = benchmarkData.filter(d => (d.TaskType || '').toLowerCase().includes('picking'));
+        const packingData = benchmarkData.filter(d => (d.TaskType || '').toLowerCase().includes('packing'));
+
+        // B. Generate Matrices
+        const pUnits = generateMatrix(pickingData, d => d.Quantity);
+        const pkUnits = generateMatrix(packingData, d => d.Quantity);
+
+        const pTasks = generateMatrix(pickingData, _ => 1);
+        const pkTasks = generateMatrix(packingData, _ => 1);
+
+        const pTime = generateMatrix(pickingData, d => Math.max(0, differenceInMinutes(d.Finish, d.Start)));
+        const pkTime = generateMatrix(packingData, d => Math.max(0, differenceInMinutes(d.Finish, d.Start)));
+
+        const pSpan = generateSpanMatrix(pickingData);
+        const pkSpan = generateSpanMatrix(packingData);
+
+        const pEff = generateRateMatrix(pUnits, pTime, 60);
+        const pkEff = generateRateMatrix(pkUnits, pkTime, 60);
+
+        const pOccEff = generateRateMatrix(pUnits, pSpan, 60);
+        const pkOccEff = generateRateMatrix(pkUnits, pkSpan, 60);
+
+        const pUtil = generateRateMatrix(pTime, pSpan, 100);
+        const pkUtil = generateRateMatrix(pkTime, pkSpan, 100);
+
+        return {
+            pickingUnits: pUnits, pickingTasks: pTasks,
+            pickingTime: pTime, pickingEfficiency: pEff,
+            pickingSpan: pSpan, pickingOccupancyEff: pOccEff,
+            pickingUtilization: pUtil,
+
+            packingUnits: pkUnits, packingTasks: pkTasks,
+            packingTime: pkTime, packingEfficiency: pkEff,
+            packingSpan: pkSpan, packingOccupancyEff: pkOccEff,
+            packingUtilization: pkUtil
+        };
+    }, [benchmarkData, metric]);
+
     // Compute available dates for filtering
     const availableDates = useMemo(() => {
         const dates = new Set<string>();
@@ -375,7 +439,7 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
 
     const pickingTasksUserView = useMemo(() => {
         const pickingData = data.filter(d => (d.TaskType || '').toLowerCase().includes('picking'));
-        return generateUserMatrix(pickingData, d => 1, pickingUnitsDateFilter);
+        return generateUserMatrix(pickingData, _ => 1, pickingUnitsDateFilter);
     }, [data, pickingUnitsDateFilter]);
 
     const pickingTimeUserView = useMemo(() => {
@@ -384,7 +448,7 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
     }, [data, pickingTimeDateFilter]);
 
     const pickingEfficiencyUserView = useMemo(() => {
-        const pickingData = data.filter(d => (d.TaskType || '').toLowerCase().includes('picking'));
+
         const numMatrix = pickingTimeViewMode === 'date' ? pickingUnits : pickingUnitsUserView;
         const denMatrix = pickingTimeViewMode === 'date' ? pickingTime : pickingTimeUserView;
         return generateRateMatrix(numMatrix, denMatrix, 60);
@@ -413,7 +477,7 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
 
     const packingTasksUserView = useMemo(() => {
         const packingData = data.filter(d => (d.TaskType || '').toLowerCase().includes('packing'));
-        return generateUserMatrix(packingData, d => 1, packingUnitsDateFilter);
+        return generateUserMatrix(packingData, _ => 1, packingUnitsDateFilter);
     }, [data, packingUnitsDateFilter]);
 
     const packingTimeUserView = useMemo(() => {
@@ -474,7 +538,10 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
         availableDates = [],
         selectedDate = null,
         onDateChange,
-        rowLabel = 'Date'
+        rowLabel = 'Date',
+        benchmarkData = null,
+        showImprovement = false,
+        isPositiveGood = true
     }: {
         title: string,
         tableData: ReturnType<typeof generateMatrix>,
@@ -490,7 +557,10 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
         availableDates?: string[],
         selectedDate?: string | null,
         onDateChange?: (date: string | null) => void,
-        rowLabel?: string
+        rowLabel?: string,
+        benchmarkData?: ReturnType<typeof generateMatrix> | null,  // Benchmark matrix for comparison
+        showImprovement?: boolean,                                  // Toggle to show/hide improvement indicators
+        isPositiveGood?: boolean                                    // Whether higher values are better (true) or worse (false)
     }) => (
         <div className="bg-white/60 backdrop-blur-md border border-white/60 rounded-3xl shadow-sm overflow-hidden p-6">
             <div className="flex items-center justify-between gap-4 mb-4">
@@ -570,30 +640,95 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                         </tr>
                     </thead>
                     <tbody>
-                        {tableData.rows.map((row, idx) => (
-                            <tr key={idx} className="border-b border-slate-100 hover:bg-white/50 transition-colors">
-                                <td className="px-4 py-3 font-medium text-slate-800 tabular-nums whitespace-nowrap">{row.date}</td>
-                                {row.values.map((val, i) => (
-                                    <td key={i} className={`px-4 py-3 text-right tabular-nums ${val === 0 ? 'text-slate-300' : 'text-slate-600'}`}>
-                                        {val > 0 ? (isTasks ? val.toLocaleString() : val.toLocaleString(undefined, { maximumFractionDigits: isRate ? 0 : 0 })) : '-'}
-                                        {val > 0 && isTime && <span className="text-[10px] text-slate-400 ml-0.5">m</span>}
+                        {tableData.rows.map((row, idx) => {
+                            const benchmarkRow = benchmarkData?.rows[idx];
+
+                            return (
+                                <tr key={idx} className="border-b border-slate-100 hover:bg-white/50 transition-colors">
+                                    <td className="px-4 py-3 font-medium text-slate-800 tabular-nums whitespace-nowrap">{row.date}</td>
+                                    {row.values.map((val, i) => {
+                                        const benchmarkVal = benchmarkRow?.values[i];
+
+                                        // Compute delta percentage
+                                        let delta = null;
+                                        if (showImprovement && benchmarkVal != null && benchmarkVal !== 0 && val > 0) {
+                                            const percentChange = ((val - benchmarkVal) / benchmarkVal) * 100;
+                                            const isImprovement = isPositiveGood ? percentChange > 0 : percentChange < 0;
+                                            delta = {
+                                                percentage: Math.abs(percentChange),
+                                                isImprovement,
+                                                isPositive: percentChange > 0
+                                            };
+                                        }
+
+                                        return (
+                                            <td key={i} className={`px-4 py-3 text-right tabular-nums ${val === 0 ? 'text-slate-300' : 'text-slate-600'}`}>
+                                                <div className="flex flex-col items-end gap-0.5">
+                                                    <div>
+                                                        {val > 0 ? (isTasks ? val.toLocaleString() : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '-'}
+                                                        {val > 0 && isTime && <span className="text-[10px] text-slate-400 ml-0.5">m</span>}
+                                                    </div>
+                                                    {delta && (
+                                                        <div className={`flex items-center gap-0.5 text-[10px] font-medium ${delta.isImprovement ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {delta.isPositive ? (
+                                                                <ArrowUpRight className="w-2.5 h-2.5" />
+                                                            ) : (
+                                                                <ArrowDownRight className="w-2.5 h-2.5" />
+                                                            )}
+                                                            {delta.percentage.toFixed(2)}%
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        );
+                                    })}
+                                    <td className="px-4 py-3 font-bold text-slate-900 text-right bg-slate-50/30 border-l border-slate-200">
+                                        {row.total.toLocaleString(undefined, { minimumFractionDigits: (isRate || isTime) ? 2 : 0, maximumFractionDigits: (isRate || isTime) ? 2 : 0 })}
+                                        {isTime && <span className="text-[10px] text-slate-500 ml-0.5">m</span>}
                                     </td>
-                                ))}
-                                <td className="px-4 py-3 font-bold text-slate-900 text-right bg-slate-50/30 border-l border-slate-200">
-                                    {row.total.toLocaleString(undefined, { maximumFractionDigits: isRate ? 0 : 0 })}
-                                    {isTime && <span className="text-[10px] text-slate-500 ml-0.5">m</span>}
-                                </td>
-                                <td className={`px-4 py-3 font-bold text-right border-l border-slate-200 bg-slate-50/30 ${colorClass.replace('text-', 'text-').replace('500', '600')}`}>
-                                    {row.average.toFixed(0)}
-                                </td>
-                            </tr>
-                        ))}
+                                    <td className={`px-4 py-3 font-bold text-right border-l border-slate-200 bg-slate-50/30 ${colorClass.replace('text-', 'text-').replace('500', '600')}`}>
+                                        {(() => {
+                                            const avgValue = row.average;
+                                            const benchmarkAvg = benchmarkRow?.average;
+
+                                            // Compute delta for average
+                                            let avgDelta = null;
+                                            if (showImprovement && benchmarkAvg != null && benchmarkAvg !== 0 && avgValue > 0) {
+                                                const percentChange = ((avgValue - benchmarkAvg) / benchmarkAvg) * 100;
+                                                const isImprovement = isPositiveGood ? percentChange > 0 : percentChange < 0;
+                                                avgDelta = {
+                                                    percentage: Math.abs(percentChange),
+                                                    isImprovement,
+                                                    isPositive: percentChange > 0
+                                                };
+                                            }
+
+                                            return (
+                                                <div className="flex flex-col items-end gap-0.5">
+                                                    <div>{avgValue.toFixed(2)}</div>
+                                                    {avgDelta && (
+                                                        <div className={`flex items-center gap-0.5 text-[10px] font-medium ${avgDelta.isImprovement ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {avgDelta.isPositive ? (
+                                                                <ArrowUpRight className="w-2.5 h-2.5" />
+                                                            ) : (
+                                                                <ArrowDownRight className="w-2.5 h-2.5" />
+                                                            )}
+                                                            {avgDelta.percentage.toFixed(2)}%
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                         {/* Totals Row */}
                         <tr className="bg-slate-100/50 border-t-2 border-slate-200 font-bold">
                             <td className="px-4 py-3 text-slate-700">{isRate ? 'Weighted Avg' : 'Total'}</td>
                             {tableData.columnTotals.map((tot, i) => (
                                 <td key={i} className="px-4 py-3 text-right text-slate-800 tabular-nums">
-                                    {tot.toLocaleString(undefined, { maximumFractionDigits: isRate ? 0 : 0 })}
+                                    {tot.toLocaleString(undefined, { minimumFractionDigits: (isRate || isTime) ? 2 : 0, maximumFractionDigits: (isRate || isTime) ? 2 : 0 })}
                                     {isTime && <span className="text-[10px] text-slate-500 ml-0.5">m</span>}
                                 </td>
                             ))}
@@ -601,7 +736,7 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 {isRate ? '-' : tableData.rows.reduce((sum, r) => sum + r.total, 0).toLocaleString()}
                             </td>
                             <td className={`px-4 py-3 text-right border-l border-slate-300 ${colorClass.replace('text-', 'text-').replace('500', '700')}`}>
-                                {tableData.totalRowAverage.toFixed(0)}
+                                {tableData.totalRowAverage.toFixed(2)}
                             </td>
                         </tr>
                     </tbody>
@@ -638,6 +773,11 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                 </div>
             </div>
 
+            {/* P10 Audit Table - Validating Statistical Splits */}
+            {stats && stats.health && stats.health.taskDurationAudit && (
+                <TaskDurationAuditTable auditData={stats.health.taskDurationAudit as any} />
+            )}
+
             {/* Content: 3x2 Matrix Layout */}
             {isUphMetric ? (
                 <div className="space-y-12 pb-12">
@@ -655,6 +795,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Picking Flow Matrix (Units)"
                                     tableData={pickingUnitsViewMode === 'date' ? pickingUnits : pickingUnitsUserView}
+                                    benchmarkData={pickingUnitsViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.pickingUnits : null}
+                                    showImprovement={isBenchmark && pickingUnitsViewMode === 'date'}
+                                    isPositiveGood={true}
                                     icon={Table}
                                     enableViewToggle={true}
                                     viewMode={pickingUnitsViewMode}
@@ -682,6 +825,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Picking Flow Matrix (Tasks)"
                                     tableData={pickingUnitsViewMode === 'date' ? pickingTasks : pickingTasksUserView}
+                                    benchmarkData={pickingUnitsViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.pickingTasks : null}
+                                    showImprovement={isBenchmark && pickingUnitsViewMode === 'date'}
+                                    isPositiveGood={true}
                                     icon={CheckSquare}
                                     isTasks={true}
                                     enableViewToggle={true}
@@ -716,6 +862,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Active Picking Time Matrix (Minutes)"
                                     tableData={pickingTimeViewMode === 'date' ? pickingTime : pickingTimeUserView}
+                                    benchmarkData={pickingTimeViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.pickingTime : null}
+                                    showImprovement={isBenchmark && pickingTimeViewMode === 'date'}
+                                    isPositiveGood={false}
                                     icon={Clock}
                                     isTime={true}
                                     colorClass="text-emerald-600"
@@ -745,6 +894,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Picking Efficiency Matrix (UPH)"
                                     tableData={pickingTimeViewMode === 'date' ? pickingEfficiency : pickingEfficiencyUserView}
+                                    benchmarkData={pickingTimeViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.pickingEfficiency : null}
+                                    showImprovement={isBenchmark && pickingTimeViewMode === 'date'}
+                                    isPositiveGood={true}
                                     icon={Zap}
                                     isRate={true}
                                     colorClass="text-emerald-600"
@@ -780,6 +932,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Picking Shift Span Matrix (Minutes)"
                                     tableData={pickingSpanViewMode === 'date' ? pickingSpan : pickingSpanUserView}
+                                    benchmarkData={pickingSpanViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.pickingSpan : null}
+                                    showImprovement={isBenchmark && pickingSpanViewMode === 'date'}
+                                    isPositiveGood={false}
                                     icon={Clock}
                                     isTime={true}
                                     colorClass="text-indigo-600"
@@ -809,6 +964,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Picking Occupancy Matrix (UPH)"
                                     tableData={pickingSpanViewMode === 'date' ? pickingOccupancyEff : pickingOccupancyUserView}
+                                    benchmarkData={pickingSpanViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.pickingOccupancyEff : null}
+                                    showImprovement={isBenchmark && pickingSpanViewMode === 'date'}
+                                    isPositiveGood={true}
                                     icon={Zap}
                                     isRate={true}
                                     colorClass="text-indigo-600"
@@ -855,6 +1013,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Packing Flow Matrix (Units)"
                                     tableData={packingUnitsViewMode === 'date' ? packingUnits : packingUnitsUserView}
+                                    benchmarkData={packingUnitsViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.packingUnits : null}
+                                    showImprovement={isBenchmark && packingUnitsViewMode === 'date'}
+                                    isPositiveGood={true}
                                     icon={Table}
                                     colorClass="text-fuchsia-500"
                                     enableViewToggle={true}
@@ -883,6 +1044,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Packing Flow Matrix (Tasks)"
                                     tableData={packingUnitsViewMode === 'date' ? packingTasks : packingTasksUserView}
+                                    benchmarkData={packingUnitsViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.packingTasks : null}
+                                    showImprovement={isBenchmark && packingUnitsViewMode === 'date'}
+                                    isPositiveGood={true}
                                     icon={CheckSquare}
                                     isTasks={true}
                                     colorClass="text-fuchsia-500"
@@ -918,6 +1082,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Active Packing Time Matrix (Minutes)"
                                     tableData={packingTimeViewMode === 'date' ? packingTime : packingTimeUserView}
+                                    benchmarkData={packingTimeViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.packingTime : null}
+                                    showImprovement={isBenchmark && packingTimeViewMode === 'date'}
+                                    isPositiveGood={false}
                                     icon={Clock}
                                     isTime={true}
                                     colorClass="text-teal-600"
@@ -947,6 +1114,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Packing Efficiency Matrix (UPH)"
                                     tableData={packingTimeViewMode === 'date' ? packingEfficiency : packingEfficiencyUserView}
+                                    benchmarkData={packingTimeViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.packingEfficiency : null}
+                                    showImprovement={isBenchmark && packingTimeViewMode === 'date'}
+                                    isPositiveGood={true}
                                     icon={Zap}
                                     isRate={true}
                                     colorClass="text-teal-600"
@@ -982,6 +1152,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Packing Shift Span Matrix (Minutes)"
                                     tableData={packingSpanViewMode === 'date' ? packingSpan : packingSpanUserView}
+                                    benchmarkData={packingSpanViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.packingSpan : null}
+                                    showImprovement={isBenchmark && packingSpanViewMode === 'date'}
+                                    isPositiveGood={false}
                                     icon={Clock}
                                     isTime={true}
                                     colorClass="text-rose-600"
@@ -1011,6 +1184,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                                 <MatrixTable
                                     title="Hourly Packing Occupancy Matrix (UPH)"
                                     tableData={packingSpanViewMode === 'date' ? packingOccupancyEff : packingOccupancyUserView}
+                                    benchmarkData={packingSpanViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.packingOccupancyEff : null}
+                                    showImprovement={isBenchmark && packingSpanViewMode === 'date'}
+                                    isPositiveGood={true}
                                     icon={Zap}
                                     isRate={true}
                                     colorClass="text-rose-600"
@@ -1053,6 +1229,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                             <MatrixTable
                                 title="Active Time (Minutes)"
                                 tableData={pickingUtilizationViewMode === 'date' ? pickingTime : pickingTimeUserView}
+                                benchmarkData={pickingUtilizationViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.pickingTime : null}
+                                showImprovement={isBenchmark && pickingUtilizationViewMode === 'date'}
+                                isPositiveGood={true}
                                 icon={Clock}
                                 isTime={true}
                                 colorClass="text-blue-600"
@@ -1081,6 +1260,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                             <MatrixTable
                                 title="Shift Span (Minutes)"
                                 tableData={pickingUtilizationViewMode === 'date' ? pickingSpan : pickingSpanUserView}
+                                benchmarkData={pickingUtilizationViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.pickingSpan : null}
+                                showImprovement={isBenchmark && pickingUtilizationViewMode === 'date'}
+                                isPositiveGood={false}
                                 icon={Clock}
                                 isTime={true}
                                 colorClass="text-indigo-600"
@@ -1109,6 +1291,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                             <MatrixTable
                                 title="Utilization %"
                                 tableData={pickingUtilizationViewMode === 'date' ? pickingUtilization : pickingUtilizationUserView}
+                                benchmarkData={pickingUtilizationViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.pickingUtilization : null}
+                                showImprovement={isBenchmark && pickingUtilizationViewMode === 'date'}
+                                isPositiveGood={true}
                                 icon={Zap}
                                 isRate={true}
                                 colorClass="text-emerald-600"
@@ -1149,6 +1334,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                             <MatrixTable
                                 title="Active Time (Minutes)"
                                 tableData={packingUtilizationViewMode === 'date' ? packingTime : packingTimeUserView}
+                                benchmarkData={packingUtilizationViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.packingTime : null}
+                                showImprovement={isBenchmark && packingUtilizationViewMode === 'date'}
+                                isPositiveGood={true}
                                 icon={Clock}
                                 isTime={true}
                                 colorClass="text-fuchsia-600"
@@ -1177,6 +1365,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                             <MatrixTable
                                 title="Shift Span (Minutes)"
                                 tableData={packingUtilizationViewMode === 'date' ? packingSpan : packingSpanUserView}
+                                benchmarkData={packingUtilizationViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.packingSpan : null}
+                                showImprovement={isBenchmark && packingUtilizationViewMode === 'date'}
+                                isPositiveGood={false}
                                 icon={Clock}
                                 isTime={true}
                                 colorClass="text-rose-600"
@@ -1205,6 +1396,9 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                             <MatrixTable
                                 title="Utilization %"
                                 tableData={packingUtilizationViewMode === 'date' ? packingUtilization : packingUtilizationUserView}
+                                benchmarkData={packingUtilizationViewMode === 'date' && benchmarkMatrices ? benchmarkMatrices.packingUtilization : null}
+                                showImprovement={isBenchmark && packingUtilizationViewMode === 'date'}
+                                isPositiveGood={true}
                                 icon={Zap}
                                 isRate={true}
                                 colorClass="text-teal-600"
@@ -1233,11 +1427,17 @@ export function MetricSupportView({ data, metric, onBack }: MetricSupportViewPro
                         </div>
                     </div>
                 </div>
+            ) : metric === 'Task Performance' ? (
+                // Task Performance shows the Audit Table above, so no additional content needed here
+                <div className="p-8 text-center text-slate-400 text-sm italic">
+                    Refer to the Forensic Data Breakdown above for statistical validation.
+                </div>
             ) : (
                 <div className="p-12 text-center text-slate-400 bg-slate-50 rounded-3xl border border-dashed border-slate-300">
                     Feature under construction for metric: {metric}
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 }

@@ -10,6 +10,12 @@ interface ExecutiveReportViewProps {
 
 export function ExecutiveReportView({ analysis, benchmarkAnalysis, benchmarkName }: ExecutiveReportViewProps) {
 
+    // Helper to calculate delta%
+    const getDelta = (curr: number, base: number) => {
+        if (!base) return 0;
+        return ((curr - base) / base) * 100;
+    };
+
     const report = useMemo(() => {
         const pPick = analysis.stats.picking;
         const pPack = analysis.stats.packing;
@@ -17,12 +23,6 @@ export function ExecutiveReportView({ analysis, benchmarkAnalysis, benchmarkName
         const bPack = benchmarkAnalysis?.stats.packing;
 
         const hasBenchmark = !!benchmarkAnalysis && !!bPick && !!bPack;
-
-        // Helper to calculate delta%
-        const getDelta = (curr: number, base: number) => {
-            if (!base) return 0;
-            return ((curr - base) / base) * 100;
-        };
 
         const pickUphDelta = hasBenchmark ? getDelta(pPick.uph, bPick!.uph) : 0;
         const packUphDelta = hasBenchmark ? getDelta(pPack.uph, bPack!.uph) : 0;
@@ -58,7 +58,7 @@ export function ExecutiveReportView({ analysis, benchmarkAnalysis, benchmarkName
         if (hasBenchmark) {
             const verb = pickUphDelta > 0 ? "led" : "lagged";
             const adj = Math.abs(pickUphDelta) > 10 ? "significantly" : "slightly";
-            pickingNarrative.push(`This performance **${adj} ${verb}** the ${benchmarkName} baseline by **${Math.abs(pickUphDelta).toFixed(1)}%**.`);
+            pickingNarrative.push(`This performance **${adj} ${verb}** the ${benchmarkName} baseline by **${Math.abs(pickUphDelta).toFixed(2)}%**.`);
         }
 
         // 3. Packing Specifics
@@ -102,7 +102,7 @@ PACKING ANALYSIS
     };
 
     return (
-        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+        <div className="w-full space-y-8 animate-in fade-in duration-500 p-6">
 
             {/* Header / Actions */}
             <div className="flex justify-between items-end border-b border-slate-200 pb-6">
@@ -158,7 +158,7 @@ PACKING ANALYSIS
                                 ${report.pickUphDelta >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}
                             `}>
                                 {report.pickUphDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                                {Math.abs(report.pickUphDelta).toFixed(1)}% vs Bmk
+                                {Math.abs(report.pickUphDelta).toFixed(2)}% vs Bmk
                             </div>
                         )}
                     </div>
@@ -174,10 +174,33 @@ PACKING ANALYSIS
                             <div>
                                 <div className="text-xs text-slate-500 uppercase font-semibold">Volume</div>
                                 <div className="text-2xl font-bold text-slate-800">{analysis.stats.picking.totalVolume.toLocaleString()}</div>
+                                {report.hasBenchmark && (
+                                    <div className="text-xs font-medium mt-1 flex items-center gap-1">
+                                        <span className="text-slate-400">vs {benchmarkAnalysis?.stats.picking.totalVolume.toLocaleString()}</span>
+                                        {(() => {
+                                            const delta = getDelta(analysis.stats.picking.totalVolume, benchmarkAnalysis!.stats.picking.totalVolume);
+                                            return (
+                                                <span className={`${delta >= 0 ? 'text-emerald-600' : 'text-rose-600'} flex items-center`}>
+                                                    {delta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                                    {Math.abs(delta).toFixed(2)}%
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <div className="text-xs text-slate-500 uppercase font-semibold">Efficiency</div>
                                 <div className="text-2xl font-bold text-blue-600">{analysis.stats.picking.uph} <span className="text-sm font-medium text-slate-400">UPH</span></div>
+                                {report.hasBenchmark && (
+                                    <div className="text-xs font-medium mt-1 flex items-center gap-1">
+                                        <span className="text-slate-400">vs {benchmarkAnalysis?.stats.picking.uph}</span>
+                                        <span className={`${report.pickUphDelta >= 0 ? 'text-emerald-600' : 'text-rose-600'} flex items-center`}>
+                                            {report.pickUphDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                            {Math.abs(report.pickUphDelta).toFixed(2)}%
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -193,7 +216,7 @@ PACKING ANALYSIS
                                 ${report.packUphDelta >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}
                             `}>
                                 {report.packUphDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                                {Math.abs(report.packUphDelta).toFixed(1)}% vs Bmk
+                                {Math.abs(report.packUphDelta).toFixed(2)}% vs Bmk
                             </div>
                         )}
                     </div>
@@ -211,10 +234,33 @@ PACKING ANALYSIS
                                 <div className={`text-2xl font-bold ${analysis.stats.packing.utilization < 70 ? 'text-amber-500' : 'text-slate-800'}`}>
                                     {analysis.stats.packing.utilization}%
                                 </div>
+                                {report.hasBenchmark && (
+                                    <div className="text-xs font-medium mt-1 flex items-center gap-1">
+                                        <span className="text-slate-400">vs {benchmarkAnalysis?.stats.packing.utilization}%</span>
+                                        {(() => {
+                                            const delta = analysis.stats.packing.utilization - benchmarkAnalysis!.stats.packing.utilization;
+                                            return (
+                                                <span className={`${delta >= 0 ? 'text-emerald-600' : 'text-rose-600'} flex items-center`}>
+                                                    {delta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                                    {Math.abs(delta).toFixed(2)}%
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <div className="text-xs text-slate-500 uppercase font-semibold">Throughput</div>
                                 <div className="text-2xl font-bold text-fuchsia-600">{analysis.stats.packing.uph} <span className="text-sm font-medium text-slate-400">UPH</span></div>
+                                {report.hasBenchmark && (
+                                    <div className="text-xs font-medium mt-1 flex items-center gap-1">
+                                        <span className="text-slate-400">vs {benchmarkAnalysis?.stats.packing.uph}</span>
+                                        <span className={`${report.packUphDelta >= 0 ? 'text-emerald-600' : 'text-rose-600'} flex items-center`}>
+                                            {report.packUphDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                            {Math.abs(report.packUphDelta).toFixed(2)}%
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

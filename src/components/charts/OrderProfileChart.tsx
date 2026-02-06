@@ -45,14 +45,14 @@ export function OrderProfileChart({ single, multi, total }: OrderProfileChartPro
                     <div className="w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]"></div>
                     <div className="flex flex-col">
                         <span className="text-sm font-medium text-slate-700">Single-Item</span>
-                        <span className="text-[10px] text-slate-400">{singlePct.toFixed(1)}%</span>
+                        <span className="text-[10px] text-slate-400">{singlePct.toFixed(2)}%</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.8)]"></div>
                     <div className="flex flex-col">
                         <span className="text-sm font-medium text-slate-700">Multi-Item</span>
-                        <span className="text-[10px] text-slate-400">{multiPct.toFixed(1)}%</span>
+                        <span className="text-[10px] text-slate-400">{multiPct.toFixed(2)}%</span>
                     </div>
                 </div>
             </div>
