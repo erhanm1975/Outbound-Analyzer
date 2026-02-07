@@ -19,7 +19,7 @@ function StatCard({ label, value, icon: Icon, colorClass, shadowClass, tooltip }
     tooltip?: React.ReactNode;
 }) {
     return (
-        <div className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] group hover:-translate-y-1 transition-transform duration-300">
+        <div className="relative overflow-hidden rounded-3xl border border-white/60 dark:border-slate-700/60 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:shadow-none group hover:-translate-y-1 transition-transform duration-300">
             <div className="flex justify-between items-start mb-4">
                 <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white ${shadowClass}`}>
                     <Icon className="h-6 w-6" />
@@ -32,8 +32,8 @@ function StatCard({ label, value, icon: Icon, colorClass, shadowClass, tooltip }
                     </div>
                 )}
             </div>
-            <h3 className="text-slate-500 text-sm font-medium">{label}</h3>
-            <p className="text-3xl font-bold text-slate-800 mt-1">{value}</p>
+            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">{label}</h3>
+            <p className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{value}</p>
         </div>
     );
 }

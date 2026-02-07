@@ -171,9 +171,10 @@ const PHASES = [
             {
                 id: 'p1_utilization',
                 text: 'Under-Utilization: Are batch sizes optimized?',
-                logic: (_stats: any, _data: ShiftRecord[], metadata: any) => {
-                    // Logic: Ratio of Avg Orders / Standard Capacity (Top 5 Avg)
+                logic: (_stats: any, _data: ShiftRecord[], metadata: any, config: BufferConfig) => {
+                    // Logic: Ratio of Avg Orders / Standard Capacity (Top N Avg)
                     // Target: Put-to-Wall, Mixed Singles, Multi-Item, Complex
+                    const capN = config.utilizationCap || 5;
 
                     const avg = metadata.utilization_target_avg_orders || 0;
                     const capacity = metadata.utilization_standard_capacity || 1; // Avoid div by 0
@@ -186,7 +187,7 @@ const PHASES = [
                         answer: isOptimized ? 'Yes' : 'Potential Waste',
                         value: `${pct}% Capacity Used`,
                         isPositive: isOptimized,
-                        explanation: `Utilization Ratio: ${avg.toFixed(2)} Avg / ${capacity.toFixed(2)} Standard Capacity (Top 5 Avg). Target: >80%.`,
+                        explanation: `Utilization Ratio: ${avg.toFixed(2)} Avg / ${capacity.toFixed(2)} Standard Capacity (Top ${capN} Avg). Target: >80%.`,
                         score: Math.min(10, Math.round(ratio * 10))
                     };
                 }
@@ -393,6 +394,36 @@ const PHASES = [
                 }
             }
         ]
+    },
+    {
+        id: 'P6',
+        title: 'Phase 6: Multi-Site & Enterprise',
+        focus: 'Network Scaling',
+        outcome: 'Standardized Operations',
+        description: 'The AI ensures that multiple sites are operating as a cohesive unit, detecting drift and enforcing best practices.',
+        levers: [
+            'Site Benchmarking: Comparing performance across warehouses.',
+            'SOP Compliance: Ensuring standard operating procedures are followed.'
+        ],
+        metrics: [
+            'SOP Compliance Score',
+            'Cross-Site Variance'
+        ],
+        questions: [
+            {
+                id: 'p6_multi_site',
+                text: 'Multi-Site: Is standard compliance enforced?',
+                logic: (stats: any) => {
+                    return {
+                        answer: 'N/A',
+                        value: 'Single Site',
+                        isPositive: false,
+                        explanation: 'Multi-site logic requires Enterprise configuration.',
+                        score: 0
+                    };
+                }
+            }
+        ]
     }
 ];
 
@@ -564,11 +595,12 @@ export function AdaptationInsightsView({ data, config }: JobDictionaryViewProps)
             }
         });
 
-        // Calculate Standard Capacity (Avg of Top 5)
+        // Calculate Standard Capacity (Avg of Top N)
+        const capN = config.utilizationCap || 5;
         utilTargetOrderCounts.sort((a, b) => b - a); // Descending
-        const top5 = utilTargetOrderCounts.slice(0, 5);
-        const top5Sum = top5.reduce((sum, val) => sum + val, 0);
-        const standardCapacity = top5.length > 0 ? top5Sum / top5.length : 1;
+        const topN = utilTargetOrderCounts.slice(0, capN);
+        const topNSum = topN.reduce((sum, val) => sum + val, 0);
+        const standardCapacity = topN.length > 0 ? topNSum / topN.length : 1;
 
         const metadata = {
             totalWaves: waves.size,
@@ -583,7 +615,7 @@ export function AdaptationInsightsView({ data, config }: JobDictionaryViewProps)
         };
 
         return { stats, totalJobs, metadata };
-    }, [data]);
+    }, [data, config.utilizationCap]);
 
     const totalJobs = analysis.totalJobs;
 
@@ -647,146 +679,154 @@ export function AdaptationInsightsView({ data, config }: JobDictionaryViewProps)
     };
 
     return (
-        <div className="space-y-12 animate-in fade-in duration-500 pb-20">
-            {/* EXPORT BUTTONS */}
-            <div className="flex justify-end gap-3 mb-6">
-                <button
-                    onClick={handleExportNotebookLM}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                >
-                    <FileText className="w-5 h-5" />
-                    Export for NotebookLM
-                </button>
-                <button
-                    onClick={handleExportPDF}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                >
-                    <FileDown className="w-5 h-5" />
-                    Export PDF Report
-                </button>
-            </div>
-            {/* UNIFIED MATURITY SCORE HERO */}
-            <div className={`p-8 rounded-2xl border ${scoreData.bg} relative overflow-hidden`}>
-                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                    <div>
-                        <h2 className="text-sm font-bold uppercase tracking-wider opacity-60 mb-2">Unified AI Maturity Score</h2>
-                        <div className="flex items-baseline gap-4">
-                            <span className={`text-6xl font-black ${scoreData.color}`}>
-                                {scoreData.weightedScore.toFixed(2)}
-                            </span>
-                            <span className="text-2xl font-bold opacity-40">/ 10</span>
-                        </div>
-                        <div className="mt-4">
-                            <span className={`px-4 py-1.5 rounded-full text-sm font-bold border bg-white/50 ${scoreData.color} border-current`}>
-                                {scoreData.label}
-                            </span>
-                        </div>
-                        <p className={`mt-4 max-w-md text-sm font-medium opacity-80 ${scoreData.color}`}>
-                            {scoreData.desc}
-                        </p>
+        <div className="space-y-8 animate-in fade-in duration-500 pb-20 p-6 lg:px-12 lg:py-8 max-w-[1600px] mx-auto w-full">
+            {/* Header & Exports */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-slate-500 text-sm font-mono uppercase tracking-wider flex items-center gap-2">
+                            <Activity className="w-4 h-4" /> Dashboard / Adaptation Insights
+                        </span>
                     </div>
+                    <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">Operational Maturity</h1>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                    <button
+                        onClick={handleExportNotebookLM}
+                        className="group flex items-center gap-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+                    >
+                        <Settings className="w-4 h-4" /> NotebookLM Export
+                    </button>
+                    <button
+                        onClick={handleExportPDF}
+                        className="flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+                    >
+                        <FileDown className="w-4 h-4" /> PDF Report
+                    </button>
+                </div>
+            </div>
 
-                    {/* Radial or Bar Viz */}
-                    <div className="flex-1 w-full max-w-lg space-y-3">
-                        {/* Phase Breakdown */}
-                        {PHASES.map(phase => {
+            {/* Hero Section: Score & Progress */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-[#0f172a] rounded-xl border border-slate-800 p-6 shadow-xl shadow-black/40">
+                {/* Score */}
+                <div className="lg:col-span-4 flex flex-col justify-center border-b lg:border-b-0 lg:border-r border-slate-800 pb-6 lg:pb-0 lg:pr-8">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-slate-400 font-medium text-sm uppercase tracking-wide">Unified AI Maturity Score</h3>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 uppercase tracking-wider">Live</span>
+                    </div>
+                    <div className="flex items-baseline gap-4">
+                        <span className="text-6xl font-black text-emerald-500 tracking-tighter drop-shadow-[0_0_15px_rgba(41,224,145,0.25)]">
+                            {scoreData.weightedScore.toFixed(2)}
+                        </span>
+                        <span className="text-2xl text-slate-600 font-medium">/ 10</span>
+                    </div>
+                    <div className="mt-4 flex items-center gap-2">
+                        <div className={`px-3 py-1 rounded-full text-slate-950 font-bold text-sm inline-flex items-center gap-1 ${scoreData.weightedScore > 8 ? 'bg-emerald-500' :
+                            scoreData.weightedScore > 5 ? 'bg-blue-500' : 'bg-amber-500'
+                            }`}>
+                            <Activity className="w-4 h-4" />
+                            {scoreData.label}
+                        </div>
+                        <span className="text-slate-500 text-sm">{scoreData.desc}</span>
+                    </div>
+                </div>
+
+                {/* Phase Progress */}
+                <div className="lg:col-span-8 flex flex-col justify-center lg:pl-4">
+                    <div className="flex justify-between items-end mb-3">
+                        <h3 className="text-slate-300 font-semibold">Phase Breakdown</h3>
+                        <span className="text-emerald-500 text-sm font-mono">Current Focus: Optimization (P3)</span>
+                    </div>
+                    <div className="relative w-full h-12 flex gap-1">
+                        {PHASES.map((phase, i) => {
                             const score = scoreData.scores[phase.id].score;
-                            const weightMap: any = { 'P1': '40%', 'P2': '20%', 'P3': '15%', 'P4': '10%', 'P5': '15%' };
+                            // Visual Logic: Full fill if score > 9, Partial linear gradient if active, empty if 0
+                            const isComplete = score > 8.5;
+                            const isActive = score > 0 && score <= 8.5;
+
+                            let bgClass = "bg-[#1e293b] border-slate-700 text-slate-500";
+                            if (isComplete) bgClass = "bg-emerald-500 text-slate-900";
+                            if (isActive) bgClass = "bg-[#1e293b] border-emerald-500 text-white";
+
                             return (
-                                <div key={phase.id} className="flex items-center gap-4 text-sm">
-                                    <div className="w-12 font-bold opacity-50">{phase.id}</div>
-                                    <div className="flex-1 h-2 bg-white/50 rounded-full overflow-hidden">
-                                        <div
-                                            className={`h-full rounded-full ${score >= 7 ? 'bg-emerald-500' : score >= 4 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                            style={{ width: `${score * 10}%` }}
-                                        />
+                                <div key={phase.id} className={`h-full flex-1 flex items-center justify-center font-bold text-xs relative group cursor-help border ${bgClass} overflow-hidden`}>
+                                    {isActive && (
+                                        <div className="absolute inset-0 bg-emerald-500/40" style={{ width: `${score * 10}%` }}></div>
+                                    )}
+                                    <span className="relative z-10">{phase.id}</span>
+
+                                    {/* Tooltip */}
+                                    <div className="absolute bottom-full mb-2 hidden group-hover:block bg-slate-800 text-white text-xs p-2 rounded whitespace-nowrap border border-slate-700 z-50 shadow-xl">
+                                        {phase.title}: {(score * 10).toFixed(0)}%
                                     </div>
-                                    <div className="w-12 text-right font-mono font-bold">{score.toFixed(2)}</div>
-                                    <div className="w-12 text-xs opacity-40 text-right">w: {weightMap[phase.id]}</div>
                                 </div>
-                            )
+                            );
                         })}
                     </div>
+                    <div className="flex justify-between mt-2 text-[10px] text-slate-500 uppercase font-mono tracking-wider">
+                        <span>Foundation</span>
+                        <span>Digitization</span>
+                        <span className="text-emerald-500">Optimization</span>
+                        <span>Automation</span>
+                        <span>Autonomy</span>
+                    </div>
                 </div>
             </div>
-            {/* JOB IDENTIFICATION (DICTIONARY) */}
-            <div className="space-y-6">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-blue-100 rounded-lg text-blue-700">
-                        <Box className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <h2 className="text-2xl font-bold text-slate-800">Job Identification</h2>
-                        <p className="text-slate-500">Automated classification of optimization profiles</p>
-                    </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Job Identification Grid */}
+            <div className="space-y-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Grid className="w-6 h-6 text-emerald-500" />
+                    Job Identification Analysis
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {DICTIONARY.map(entry => {
                         const stat = analysis.stats[entry.id];
-                        const percentage = totalJobs > 0 ? ((stat.count / totalJobs) * 100).toFixed(2) : '0.00';
-                        const isActive = stat.count > 0;
+                        const count = stat.count;
+                        const pct = totalJobs > 0 ? ((count / totalJobs) * 100).toFixed(0) : 0;
                         const Icon = entry.icon;
+                        const colorClass = entry.id === 'PUT_TO_WALL' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                            entry.id === 'IDENTICAL_ITEM' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                'text-purple-400 bg-purple-500/10 border-purple-500/20';
+
+                        const isActive = count > 0;
 
                         return (
-                            <div
-                                key={entry.id}
-                                className={`
-                                    relative overflow-hidden rounded-xl border-2 transition-all duration-300 hover:shadow-lg
-                                    ${isActive ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50 opacity-80'}
-                                `}
-                            >
-                                <div className={`h-2 w-full ${isActive ? entry.color.split(' ')[0] : 'bg-slate-200'}`} />
-                                <div className="p-6 space-y-4">
-                                    <div className="flex justify-between items-start gap-4">
-                                        <div className={`p-3 rounded-lg ${isActive ? entry.color : 'bg-slate-200 text-slate-400'}`}>
-                                            <Icon className="w-6 h-6" />
+                            <div key={entry.id} className="bg-[#0f172a] border border-slate-800 rounded-lg p-5 hover:border-slate-700 transition-all group">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`size-10 rounded flex items-center justify-center border ${colorClass}`}>
+                                            <Icon className="w-5 h-5" />
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-2xl font-bold text-slate-900">
-                                                {stat.count.toLocaleString()}
-                                            </div>
-                                            <div className="text-sm font-medium text-slate-500">
-                                                {percentage}%
-                                            </div>
+                                        <div>
+                                            <h4 className="text-white font-semibold">{entry.title}</h4>
+                                            <span className="text-xs text-slate-500 font-mono">TYPE: {entry.id}</span>
                                         </div>
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold text-lg text-slate-800 leading-tight mb-2">
-                                            {entry.title}
-                                        </h3>
-                                        <p className="text-sm text-slate-600 leading-relaxed">
-                                            {entry.definition}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${isActive ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-500'}`}>
-                                            <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`} />
-                                            {isActive ? 'Detected' : 'Inactive'}
+                                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded border ${isActive ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-slate-700/50 border-slate-600/50'}`}>
+                                        <span className={`size-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                                        <span className={`text-[10px] font-bold uppercase tracking-wide ${isActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                            {isActive ? 'Active' : 'Idle'}
                                         </span>
                                     </div>
-                                    <div className="border-t border-slate-100 pt-4 space-y-3 text-sm">
-                                        <div className="pt-2 text-[10px] text-slate-400 italic">
-                                            Detection: {entry.criteriaDescription}
-                                        </div>
+                                </div>
+                                <div className="flex items-end gap-3 mb-4">
+                                    <span className="text-3xl font-mono font-bold text-white">{count.toLocaleString()}</span>
+                                    <span className="text-sm text-slate-400 mb-1">jobs detected ({pct}%)</span>
+                                </div>
 
-                                        {/* SAMPLE JOBS FOR VERIFICATION */}
-                                        {isActive && stat.jobs.length > 0 && (
-                                            <div className="pt-2">
-                                                <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Sample Job IDs:</span>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {stat.jobs.slice(0, 3).map((jobId: string) => (
-                                                        <span key={jobId} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-mono border border-slate-200">
-                                                            {jobId}
-                                                        </span>
-                                                    ))}
-                                                    {stat.jobs.length > 3 && (
-                                                        <span className="px-1.5 py-0.5 text-[10px] text-slate-400">+{stat.jobs.length - 3} more</span>
-                                                    )}
-                                                </div>
+                                {/* Sample IDs Box */}
+                                <div className={`bg-black/40 rounded border border-slate-800/50 p-3 font-mono text-xs space-y-1 ${!isActive && 'flex items-center justify-center h-[76px]'}`}>
+                                    {isActive ? (
+                                        stat.jobs.slice(0, 3).map((jobId: string) => (
+                                            <div key={jobId} className="flex justify-between hover:text-white cursor-pointer group/item">
+                                                <span className="text-slate-400 group-hover/item:text-white transition-colors">ID: {jobId}</span>
+                                                <span className="text-emerald-500">98% conf.</span>
                                             </div>
-                                        )}
-                                    </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-slate-500 italic text-center">No active streams</div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -794,125 +834,77 @@ export function AdaptationInsightsView({ data, config }: JobDictionaryViewProps)
                 </div>
             </div>
 
-            {/* PHASE ADAPTATION INSIGHTS */}
-            <div className="space-y-6 pt-8 border-t border-slate-200">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-purple-100 rounded-lg text-purple-700">
-                        <Activity className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <h2 className="text-2xl font-bold text-slate-800">Phase Adaptation Insights</h2>
-                        <p className="text-slate-500">Diagnostic assessment of operational maturity</p>
-                    </div>
-                </div>
+            {/* Detailed Phase Diagnostics */}
+            <div className="space-y-6 mt-8 border-t border-slate-800 pt-8">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                    Detailed Phase Diagnostics
+                </h3>
 
-                <div className="grid grid-cols-1 gap-8">
-                    {PHASES.map(phase => {
-                        const phaseData = scoreData.scores[phase.id];
-                        const score = phaseData.score;
-                        const results = phaseData.results;
+                {PHASES.map((phase, i) => {
+                    const score = scoreData.scores[phase.id].score;
+                    const isComplete = score > 8.5;
 
-                        let scoreColor = 'text-red-500';
-                        if (score >= 7) scoreColor = 'text-emerald-500';
-                        else if (score >= 4) scoreColor = 'text-amber-500';
-
-                        return (
-                            <div key={phase.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                                <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+                    return (
+                        <div key={phase.id} className="bg-[#0f172a] border border-slate-800 rounded-xl overflow-hidden">
+                            {/* Header */}
+                            <div className="px-6 py-4 bg-[#1e293b]/50 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className={`size-8 rounded-full ${isComplete ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-white'} font-bold flex items-center justify-center text-sm`}>
+                                        {phase.id}
+                                    </div>
                                     <div>
-                                        <h3 className="font-bold text-lg text-slate-800">{phase.title}</h3>
-                                        <div className="flex gap-4 mt-1 text-sm text-slate-500">
-                                            <span>Focus: <strong className="text-slate-700">{phase.focus}</strong></span>
-                                            <span>•</span>
-                                            <span>Make or Break: <strong className="text-slate-700">{phase.outcome}</strong></span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className={`px-4 py-1 bg-white rounded-lg shadow-sm border border-slate-100 flex flex-col items-center`}>
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Score</span>
-                                            <span className={`text-xl font-black ${scoreColor}`}>
-                                                {score.toFixed(0)}<span className="text-slate-300 text-sm">/10</span>
-                                            </span>
-                                        </div>
-                                        <div className="text-2xl font-black text-slate-100 select-none">
-                                            {phase.id}
-                                        </div>
+                                        <h4 className="text-white font-bold text-lg">{phase.title}</h4>
+                                        <p className="text-slate-400 text-sm">{phase.description}</p>
                                     </div>
                                 </div>
-
-                                {/* PHASE DETAIL HEADER (DESCRIPTION & LEVERS) */}
-                                <div className="px-6 py-4 bg-white space-y-4 border-b border-slate-100">
-                                    <p className="text-slate-600 text-sm leading-relaxed">{phase.description}</p>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                            <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Key Operational Levers</h4>
-                                            <ul className="space-y-1">
-                                                {phase.levers.map((lever, i) => (
-                                                    <li key={i} className="text-xs text-slate-700 flex items-start gap-2">
-                                                        <span className="text-slate-400 mt-0.5">•</span>
-                                                        <span>{lever}</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                            <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Impacted Metrics</h4>
-                                            <div className="flex flex-wrap gap-2">
-                                                {phase.metrics.map((metric, i) => (
-                                                    <span key={i} className="px-2 py-1 bg-white border border-slate-200 rounded text-xs text-slate-600 font-medium">
-                                                        {metric}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="divide-y divide-slate-100">
-                                    {phase.questions.map((q, idx) => {
-                                        const analysisResult = results[idx]; // Reuse result
-                                        return (
-                                            <div key={q.id} className="p-6 hover:bg-slate-50/50 transition-colors grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                                                <div className="md:col-span-1">
-                                                    <p className="font-medium text-slate-800">{q.text}</p>
-                                                </div>
-                                                <div className="md:col-span-1">
-                                                    <div className="flex flex-col gap-2">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`px-4 py-1.5 rounded-lg text-sm font-bold border ${analysisResult.isPositive
-                                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                                : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                                                                {analysisResult.answer}
-                                                            </div>
-                                                            <span className="text-sm font-mono text-slate-400">
-                                                                ({analysisResult.value})
-                                                            </span>
-                                                        </div>
-                                                        {/* Score Badge */}
-                                                        <div>
-                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${analysisResult.score !== undefined && analysisResult.score >= 5
-                                                                ? 'bg-slate-100 text-slate-600 border-slate-200'
-                                                                : 'bg-red-50 text-red-600 border-red-100'}`}>
-                                                                Score: {analysisResult.score !== undefined ? analysisResult.score : 0}/10
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="md:col-span-1 text-xs text-slate-500 leading-relaxed pl-4 border-l border-slate-100 italic">
-                                                    Method: {analysisResult.explanation}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                <div className="text-right">
+                                    <span className={`block text-2xl font-bold ${isComplete ? 'text-emerald-500' : 'text-slate-200'}`}>{score.toFixed(1)}/10</span>
+                                    <span className="text-xs text-slate-500 font-medium uppercase tracking-wide">
+                                        {isComplete ? 'Optimized' : 'Analysis Active'}
+                                    </span>
                                 </div>
                             </div>
-                        )
-                    })}
-                </div>
+
+                            {/* Table */}
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-black/20 text-slate-500 text-xs uppercase font-semibold tracking-wider">
+                                        <tr>
+                                            <th className="px-6 py-3 w-1/2">Diagnostic Question</th>
+                                            <th className="px-6 py-3">Status</th>
+                                            <th className="px-6 py-3">Raw Value</th>
+                                            <th className="px-6 py-3">Detection Method</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800 text-sm">
+                                        {scoreData.scores[phase.id].results.map((res: any, idx: number) => (
+                                            <tr key={idx} className="hover:bg-white/5 transition-colors">
+                                                <td className="px-6 py-4 text-slate-200">{phase.questions[idx].text}</td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${res.isPositive
+                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                        : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                                        }`}>
+                                                        {res.answer}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 font-mono text-slate-300">{res.value}</td>
+                                                <td className="px-6 py-4 text-slate-500 italic">Automated Logic</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
+
         </div>
     );
 }
+
+
 
 

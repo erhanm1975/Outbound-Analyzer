@@ -53,7 +53,7 @@ export function useFileIngestion() {
         };
     }, []);
 
-    const processFiles = useCallback((files: File[]) => {
+    const processFiles = useCallback((files: File[], config?: BufferConfig) => {
         if (!workerRef.current) return;
 
         setIsProcessing(true);
@@ -65,8 +65,32 @@ export function useFileIngestion() {
         setActivityObjects([]);
 
         // Send files to worker
-        workerRef.current.postMessage(files);
+        workerRef.current.postMessage({
+            type: 'UPLOAD',
+            files,
+            config: config ? {
+                smoothingTolerance: config.smoothingTolerance,
+                breakThreshold: config.breakThreshold,
+                travelRatio: config.travelRatio
+            } : undefined
+        });
     }, []);
 
-    return { processFiles, isProcessing, data, taskObjects, activityObjects, summary, error, progress };
+    const reprocessLogic = useCallback((config: BufferConfig) => {
+        if (!workerRef.current) return;
+        // Don't clear data, just show processing
+        setIsProcessing(true);
+        setError(null);
+
+        workerRef.current.postMessage({
+            type: 'REPROCESS',
+            config: {
+                smoothingTolerance: config.smoothingTolerance,
+                breakThreshold: config.breakThreshold,
+                travelRatio: config.travelRatio
+            }
+        });
+    }, []);
+
+    return { processFiles, reprocessLogic, isProcessing, data, taskObjects, activityObjects, summary, error, progress };
 }

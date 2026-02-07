@@ -96,23 +96,23 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
     if (hours.length === 0) return null;
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+        <div className="bg-white dark:bg-[#111418] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-full">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-[#111418]">
+                <h3 className="font-semibold text-slate-800 dark:text-white flex items-center gap-2">
                     Activity Matrix
                     {benchmarkData && (
-                        <span className="text-xs font-normal text-slate-500 bg-slate-200/50 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-normal text-slate-500 dark:text-slate-400 bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                             Vs Benchmark
                         </span>
                     )}
                 </h3>
 
-                <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
                     <button
                         onClick={() => setMode('TASKS')}
                         className={cn(
                             "px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all",
-                            mode === 'TASKS' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                            mode === 'TASKS' ? "bg-white dark:bg-[#111418] text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                         )}
                     >
                         <Layers className="w-3.5 h-3.5" />
@@ -122,7 +122,7 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
                         onClick={() => setMode('QTY')}
                         className={cn(
                             "px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all",
-                            mode === 'QTY' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                            mode === 'QTY' ? "bg-white dark:bg-[#111418] text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                         )}
                     >
                         <Package className="w-3.5 h-3.5" />
@@ -136,23 +136,23 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
 
             <div className="flex-1 overflow-auto">
                 <table className="w-full text-xs text-left border-collapse">
-                    <thead className="bg-slate-50 sticky top-0 z-10">
+                    <thead className="bg-slate-50 dark:bg-[#111418] sticky top-0 z-10">
                         <tr>
-                            <th className="p-3 font-medium text-slate-500 border-b border-slate-200 w-40 sticky left-0 bg-slate-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                            <th className="p-3 font-medium text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 w-40 sticky left-0 bg-slate-50 dark:bg-[#111418] z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-none">
                                 <div className="flex items-center gap-1.5">
                                     User
                                     <RichTooltip content={METRIC_TOOLTIPS.COL_MATRIX_USER} />
                                 </div>
                             </th>
                             {hours.map(h => (
-                                <th key={h} className="p-3 font-medium text-slate-500 border-b border-slate-200 min-w-[80px] text-center group/th">
+                                <th key={h} className="p-3 font-medium text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 min-w-[80px] text-center group/th">
                                     <div className="flex items-center justify-center gap-1">
                                         {h}:00
                                         <RichTooltip content={METRIC_TOOLTIPS.COL_MATRIX_HOUR} className="opacity-0 group-hover/th:opacity-100 transition-opacity" />
                                     </div>
                                 </th>
                             ))}
-                            <th className="p-3 font-medium text-slate-700 border-b border-slate-200 w-20 text-center bg-slate-50/80">
+                            <th className="p-3 font-medium text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 w-20 text-center bg-slate-50/80 dark:bg-[#111418]">
                                 <div className="flex items-center justify-center gap-1.5">
                                     Total
                                     <RichTooltip content={METRIC_TOOLTIPS.COL_MATRIX_TOTAL} />
@@ -160,10 +160,10 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {/* TOTAL ROW */}
-                        <tr className="bg-slate-50 border-b-2 border-slate-200">
-                            <td className="p-3 font-bold text-slate-800 border-r border-slate-200 sticky left-0 bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                        <tr className="bg-slate-50 dark:bg-[#111418] border-b-2 border-slate-200 dark:border-slate-800">
+                            <td className="p-3 font-bold text-slate-800 dark:text-white border-r border-slate-200 dark:border-slate-800 sticky left-0 bg-slate-50 dark:bg-[#111418] z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] dark:shadow-none">
                                 TOTAL
                             </td>
                             {hours.map(h => {
@@ -192,7 +192,7 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
                                 ) : null;
 
                                 return (
-                                    <td key={h} className="p-2 text-center text-slate-800 font-bold border-r border-slate-200 relative group/cell">
+                                    <td key={h} className="p-2 text-center text-slate-800 dark:text-slate-200 font-bold border-r border-slate-200 dark:border-slate-800 relative group/cell">
                                         {hasBmk && (val > 0 || bmkVal > 0) ? (
                                             <RichTooltip content={tooltipContent}>
                                                 <div className="cursor-help w-full h-full flex items-center justify-center">
@@ -203,7 +203,7 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
                                                             {bmkVal > 0 && Math.abs(diff) > 0 && (
                                                                 <div className={cn(
                                                                     "flex items-center text-[9px] font-bold",
-                                                                    isPositive ? "text-emerald-600" : "text-rose-600"
+                                                                    isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                                                                 )}>
                                                                     {isPositive ? <TrendingUp className="w-2 h-2 mr-0.5" /> : <TrendingDown className="w-2 h-2 mr-0.5" />}
                                                                     {Math.abs(diff)}
@@ -211,17 +211,17 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <span className="text-slate-300">-</span>
+                                                        <span className="text-slate-300 dark:text-slate-600">-</span>
                                                     )}
                                                 </div>
                                             </RichTooltip>
                                         ) : (
-                                            val > 0 ? <span>{val}</span> : <span className="text-slate-300">-</span>
+                                            val > 0 ? <span>{val}</span> : <span className="text-slate-300 dark:text-slate-600">-</span>
                                         )}
                                     </td>
                                 );
                             })}
-                            <td className="p-3 font-bold text-slate-900 text-center bg-slate-100">
+                            <td className="p-3 font-bold text-slate-900 dark:text-white text-center bg-slate-100 dark:bg-slate-800/50">
                                 {Object.values(hourlyTotals).reduce((sum, h) => sum + (mode === 'TASKS' ? h.tasks : h.qty), 0)}
                             </td>
                         </tr>
@@ -229,8 +229,8 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
                         {users.map(user => {
                             let rowTotal = 0;
                             return (
-                                <tr key={user} className="hover:bg-slate-50/80 transition-colors group">
-                                    <td className="p-3 font-medium text-slate-700 border-r border-slate-100 sticky left-0 bg-white group-hover:bg-slate-50/80 transition-colors z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                <tr key={user} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors group">
+                                    <td className="p-3 font-medium text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800 sticky left-0 bg-white dark:bg-[#111418] group-hover:bg-slate-50/80 dark:group-hover:bg-slate-800/50 transition-colors z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] dark:shadow-none">
                                         {user}
                                     </td>
                                     {hours.map(h => {
@@ -265,7 +265,7 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
                                         ) : null;
 
                                         return (
-                                            <td key={h} className="p-2 text-center text-slate-600 border-r border-slate-50/50 relative group/cell">
+                                            <td key={h} className="p-2 text-center text-slate-600 dark:text-slate-400 border-r border-slate-50/50 dark:border-slate-800/50 relative group/cell">
                                                 {hasBmk && (val > 0 || bmkVal > 0) ? (
                                                     <RichTooltip content={tooltipContent}>
                                                         <div className="cursor-help w-full h-full flex items-center justify-center">
@@ -298,7 +298,7 @@ export function ActivityMatrix({ data, benchmarkData }: ActivityMatrixProps) {
                                                     val > 0 ? (
                                                         <span className={cn(
                                                             "inline-block px-1.5 py-0.5 rounded text-[10px] font-medium min-w-[30px]",
-                                                            mode === 'TASKS' ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"
+                                                            mode === 'TASKS' ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400" : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
                                                         )}>
                                                             {val}
                                                         </span>

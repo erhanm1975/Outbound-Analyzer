@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Layout } from './components/layout';
 import { FileDropzone } from './components/file-dropzone';
 import { MetricCard } from './components/metric-card';
+import { ConfigPanel } from './components/config-panel';
 import { ActivityMatrix } from './components/activity-matrix';
 import { Sidebar } from './components/sidebar';
 import { ImportSummary } from './components/import-summary';
@@ -13,6 +14,8 @@ import { DynamicFlowView } from './components/dynamic-flow-view';
 import { ShiftHealthView } from './components/shift-health-view';
 import { ExecutiveReportView } from './components/executive-report-view';
 
+
+
 import { JobBreakdownView } from './components/job-breakdown-view';
 import { AdaptationInsightsView } from './components/adaptation-insights-view';
 import { DataHealthView } from './components/data-health-view';
@@ -22,21 +25,24 @@ import { HeroMetricCard } from './components/hero-metric-card';
 import { WorkloadProfilePanel } from './components/workload-profile-panel';
 import { TaskFlowVisual } from './components/charts/TaskFlowVisual';
 import { JobDetailsView } from './components/job-details-view';
-import { DashboardSection } from './components/dashboard-section';
 import { WarehouseLogicView } from './components/warehouse-logic-view';
+import { DashboardSection } from './components/dashboard-section';
+
 import { useFileIngestion } from './hooks';
 import { analyzeShift } from './logic/analysis';
 import { generateAIContext } from './logic/context-export';
 import { DEFAULT_BUFFER_CONFIG, type BufferConfig, type ShiftRecord, type IngestionSummary, type AnalysisResult } from './types';
 import { METRIC_TOOLTIPS } from './logic/metric-definitions';
-import { Activity, Clock, Box, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Activity, Clock, Box, TrendingUp, AlertTriangle, Settings, ClipboardList } from 'lucide-react';
+import { VelocityView } from './components/velocity-view';
+import { UserGuideView } from './components/user-guide-view';
 import { GlobalHeader } from './components/global-header';
 
 function App() {
-  const { processFiles, isProcessing, data, taskObjects, activityObjects, summary, error, progress } = useFileIngestion();
+  const { processFiles, reprocessLogic, isProcessing, data, taskObjects, activityObjects, summary, error, progress } = useFileIngestion();
   const [config, setConfig] = useState<BufferConfig>(DEFAULT_BUFFER_CONFIG);
   const [showSummary, setShowSummary] = useState(false);
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'health' | 'jobs' | 'dictionary' | 'activity' | 'details' | 'anomalies' | 'data-health' | 'metrics' | 'report' | 'users' | 'flow' | 'forensics' | 'FORENSIC'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'health' | 'jobs' | 'dictionary' | 'activity' | 'details' | 'anomalies' | 'data-health' | 'metrics' | 'report' | 'users' | 'flow' | 'forensic' | 'timeline' | 'settings' | 'standards' | 'velocity' | 'guide'>('dashboard');
 
   // Support View Metric State
   const [detailMetric, setDetailMetric] = useState<string>('Picking UPH (Hourly Average)');
@@ -168,8 +174,15 @@ function App() {
 
   // View state
   const handleFiles = (files: File[]) => {
-    processFiles(files);
+    processFiles(files, config);
   };
+
+  // Trigger reprocessing when smoothing tolerance changes
+  useEffect(() => {
+    if (data.length > 0 && config.smoothingTolerance !== undefined) {
+      reprocessLogic(config);
+    }
+  }, [config.smoothingTolerance]);
 
   const handleExportContext = () => {
     if (!primaryAnalysis) return;
@@ -195,34 +208,31 @@ function App() {
         <Sidebar
           currentTab={currentTab}
           onTabChange={setCurrentTab as any}
-          config={config}
-          onConfigChange={setConfig}
-          suggestedBuffer={suggestedBuffer > 0 ? suggestedBuffer : undefined}
         />
       }
     >
       <div className="p-6 space-y-6 w-full h-full flex flex-col relative">
         {/* Background Blobs (Absolute Positioned) */}
-        <div className="fixed top-0 left-0 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-[80px] opacity-60 -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse pointer-events-none"></div>
-        <div className="fixed top-1/2 right-0 w-[30rem] h-[30rem] bg-purple-300 rounded-full mix-blend-multiply filter blur-[80px] opacity-60 translate-x-1/4 -translate-y-1/2 -z-10 pointer-events-none"></div>
-        <div className="fixed bottom-0 left-1/3 w-80 h-80 bg-cyan-200 rounded-full mix-blend-multiply filter blur-[80px] opacity-60 translate-y-1/3 -z-10 pointer-events-none"></div>
+        <div className="fixed top-0 left-0 w-96 h-96 bg-blue-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse pointer-events-none"></div>
+        <div className="fixed top-1/2 right-0 w-[30rem] h-[30rem] bg-purple-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 translate-x-1/4 -translate-y-1/2 -z-10 pointer-events-none"></div>
+        <div className="fixed bottom-0 left-1/3 w-80 h-80 bg-cyan-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 translate-y-1/3 -z-10 pointer-events-none"></div>
 
         {/* Header / Error */}
         {error && (
-          <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-2 shrink-0">
+          <div className="p-4 bg-rose-950/30 border border-rose-900/50 text-rose-400 rounded-xl flex items-center gap-2 shrink-0">
             <AlertTriangle className="w-5 h-5" />
             {error}
           </div>
         )}
 
         {analysisError && (
-          <div className="p-4 bg-rose-100 border border-rose-300 text-rose-800 rounded-xl flex flex-col gap-2 shrink-0">
+          <div className="p-4 bg-rose-950/30 border border-rose-900/50 text-rose-400 rounded-xl flex flex-col gap-2 shrink-0">
             <div className="flex items-center gap-2 font-bold">
               <AlertTriangle className="w-5 h-5" />
               Critical Analysis Error
             </div>
-            <p className="text-sm">The dataset could not be analyzed. This is likely due to extreme data volume or format issues.</p>
-            <p className="font-mono text-xs bg-white/50 p-2 rounded">{analysisError}</p>
+            <p className="text-sm text-rose-300">The dataset could not be analyzed. This is likely due to extreme data volume or format issues.</p>
+            <p className="font-mono text-xs bg-black/30 p-2 rounded text-rose-200">{analysisError}</p>
           </div>
         )}
 
@@ -266,18 +276,18 @@ function App() {
                 // Empty State for Dashboard: Ingestion
                 <div className="max-w-xl mx-auto mt-20">
                   <div className="text-center mb-8">
-                    <h2 className="text-2xl font-bold text-slate-800">Shift Analysis Ingestion</h2>
-                    <p className="text-slate-500 mt-2">Upload day log or multiple logs for benchmarking</p>
+                    <h2 className="text-2xl font-bold text-slate-100">Shift Analysis Ingestion</h2>
+                    <p className="text-slate-400 mt-2">Upload day log or multiple logs for benchmarking</p>
                   </div>
                   <FileDropzone onFilesSelected={handleFiles} isProcessing={isProcessing} />
                   {isProcessing && (
                     <div className="mt-8 max-w-sm mx-auto">
-                      <div className="flex justify-between text-xs text-slate-500 mb-2 font-medium">
+                      <div className="flex justify-between text-xs text-slate-400 mb-2 font-medium">
                         <span className="animate-pulse">Processing shift data...</span>
-                        <span className="font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{progress.toLocaleString()} rows</span>
+                        <span className="font-mono text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded-full">{progress.toLocaleString()} rows</span>
                       </div>
-                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden w-full">
-                        <div className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 animate-[pulse_1s_ease-in-out_infinite] w-full origin-left"></div>
+                      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full">
+                        <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 animate-[pulse_1s_ease-in-out_infinite] w-full origin-left"></div>
                       </div>
                     </div>
                   )}
@@ -295,70 +305,68 @@ function App() {
                         <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
                           {/* Row 1: Picking */}
                           <HeroMetricCard
-                            title="Picked UPH (Occupancy)"
-                            value={activeStats.uph.toFixed(2)}
+                            title="Productive UPH (Picking)"
+                            value={activeStats.productiveUPH ? activeStats.productiveUPH.toFixed(2) : "0.00"}
                             icon={<Activity className="w-6 h-6" />}
-                            colorClass="from-blue-500 to-indigo-600"
-                            tooltip={METRIC_TOOLTIPS.PICKING_UPH_OCCUPANCY}
-                            benchmarkValue={secondaryActiveStats?.uph.toFixed(2)}
+                            colorClass="from-emerald-500 to-teal-600"
+                            tooltip={METRIC_TOOLTIPS.PRODUCTIVE_UPH}
+                            benchmarkValue={secondaryActiveStats?.productiveUPH?.toFixed(2)}
                             trend={isBenchmark && secondaryActiveStats ? {
-                              value: Number(((activeStats.uph - secondaryActiveStats.uph) / secondaryActiveStats.uph * 100).toFixed(2)),
+                              value: Number(((activeStats.productiveUPH - secondaryActiveStats.productiveUPH) / secondaryActiveStats.productiveUPH * 100).toFixed(2)),
                               isPositiveGood: true
                             } : undefined}
                             onClick={() => {
-                              setDetailMetric('UPH (Occupancy)');
+                              setDetailMetric('Productive UPH');
                               setCurrentTab('metrics');
                             }}
                           />
                           <HeroMetricCard
-                            title="Picker Time Utilization"
-                            value={activeStats.utilization.toFixed(2)}
-                            suffix="%"
+                            title="Floor UPH (Picking)"
+                            value={activeStats.floorUPH ? activeStats.floorUPH.toFixed(2) : "0.00"}
                             icon={<TrendingUp className="w-6 h-6" />}
-                            colorClass="from-emerald-400 to-teal-600"
-                            tooltip={METRIC_TOOLTIPS.PICKING_UTILIZATION}
-                            benchmarkValue={secondaryActiveStats?.utilization.toFixed(2)}
+                            colorClass="from-blue-500 to-indigo-600"
+                            tooltip={METRIC_TOOLTIPS.FLOOR_UPH}
+                            benchmarkValue={secondaryActiveStats?.floorUPH?.toFixed(2)}
                             trend={isBenchmark && secondaryActiveStats ? {
-                              value: Number((activeStats.utilization - secondaryActiveStats.utilization).toFixed(2)),
+                              value: Number(((activeStats.floorUPH - secondaryActiveStats.floorUPH) / secondaryActiveStats.floorUPH * 100).toFixed(2)),
                               isPositiveGood: true
                             } : undefined}
                             onClick={() => {
-                              setDetailMetric('Picking Utilization');
+                              setDetailMetric('Floor UPH');
                               setCurrentTab('metrics');
                             }}
                           />
 
                           {/* Row 2: Packing (Explicitly fetched from main analysis props) */}
                           <HeroMetricCard
-                            title="Packed UPH (Occupancy)"
-                            value={primaryAnalysis.stats.packing.uph.toFixed(2)}
+                            title="Productive UPH (Packing)"
+                            value={primaryAnalysis.stats.packing.productiveUPH ? primaryAnalysis.stats.packing.productiveUPH.toFixed(2) : "0.00"}
                             icon={<Activity className="w-6 h-6" />}
                             colorClass="from-fuchsia-500 to-pink-600"
-                            tooltip={METRIC_TOOLTIPS.PACKING_UPH_OCCUPANCY}
-                            benchmarkValue={secondaryAnalysis?.stats.packing.uph.toFixed(2)}
+                            tooltip={METRIC_TOOLTIPS.PRODUCTIVE_UPH}
+                            benchmarkValue={secondaryAnalysis?.stats.packing.productiveUPH?.toFixed(2)}
                             trend={isBenchmark && secondaryAnalysis ? {
-                              value: Number(((primaryAnalysis.stats.packing.uph - secondaryAnalysis.stats.packing.uph) / secondaryAnalysis.stats.packing.uph * 100).toFixed(2)),
+                              value: Number(((primaryAnalysis.stats.packing.productiveUPH - secondaryAnalysis.stats.packing.productiveUPH) / secondaryAnalysis.stats.packing.productiveUPH * 100).toFixed(2)),
                               isPositiveGood: true
                             } : undefined}
                             onClick={() => {
-                              setDetailMetric('Packing UPH (Occupancy)');
+                              setDetailMetric('Packing Productive UPH');
                               setCurrentTab('metrics');
                             }}
                           />
                           <HeroMetricCard
-                            title="Packer Time Utilization"
-                            value={primaryAnalysis.stats.packing.utilization.toFixed(2)}
-                            suffix="%"
+                            title="Floor UPH (Packing)"
+                            value={primaryAnalysis.stats.packing.floorUPH ? primaryAnalysis.stats.packing.floorUPH.toFixed(2) : "0.00"}
                             icon={<TrendingUp className="w-6 h-6" />}
-                            colorClass="from-teal-400 to-cyan-600"
-                            tooltip={METRIC_TOOLTIPS.PACKING_UTILIZATION}
-                            benchmarkValue={secondaryAnalysis?.stats.packing.utilization.toFixed(2)}
+                            colorClass="from-purple-400 to-violet-600"
+                            tooltip={METRIC_TOOLTIPS.FLOOR_UPH}
+                            benchmarkValue={secondaryAnalysis?.stats.packing.floorUPH?.toFixed(2)}
                             trend={isBenchmark && secondaryAnalysis ? {
-                              value: Number((primaryAnalysis.stats.packing.utilization - secondaryAnalysis.stats.packing.utilization).toFixed(2)),
+                              value: Number(((primaryAnalysis.stats.packing.floorUPH - secondaryAnalysis.stats.packing.floorUPH) / secondaryAnalysis.stats.packing.floorUPH * 100).toFixed(2)),
                               isPositiveGood: true
                             } : undefined}
                             onClick={() => {
-                              setDetailMetric('Packing Utilization');
+                              setDetailMetric('Packing Floor UPH');
                               setCurrentTab('metrics');
                             }}
                           />
@@ -367,15 +375,16 @@ function App() {
                         {/* Column 3: Density Metrics */}
                         <div className="flex flex-col gap-6">
                           <HeroMetricCard
-                            title="Visit Density (Loc Visits/Unit)"
-                            value={activeStats.locationsPerUnit.toFixed(2)}
+                            title="Output Density"
+                            value={activeStats.outputDensity ? activeStats.outputDensity.toFixed(2) : "0.00"}
+                            suffix=" Units/Stop"
                             icon={<Box className="w-6 h-6" />}
                             colorClass="from-orange-400 to-amber-500"
-                            tooltip={METRIC_TOOLTIPS.VISIT_DENSITY_UNIT}
-                            benchmarkValue={secondaryActiveStats?.locationsPerUnit.toFixed(2)}
+                            tooltip={METRIC_TOOLTIPS.OUTPUT_DENSITY}
+                            benchmarkValue={secondaryActiveStats?.outputDensity?.toFixed(2)}
                             trend={isBenchmark && secondaryActiveStats ? {
-                              value: Number(((activeStats.locationsPerUnit - secondaryActiveStats.locationsPerUnit) / secondaryActiveStats.locationsPerUnit * 100).toFixed(2)),
-                              isPositiveGood: false
+                              value: Number(((activeStats.outputDensity - secondaryActiveStats.outputDensity) / secondaryActiveStats.outputDensity * 100).toFixed(2)),
+                              isPositiveGood: true
                             } : undefined}
                           />
                           <HeroMetricCard
@@ -414,7 +423,7 @@ function App() {
                             setDetailMetric('Task Performance');
                             setCurrentTab('metrics');
                           }}
-                          onForensicsClick={() => setCurrentTab('forensics')}
+                          onForensicsClick={() => setCurrentTab('forensic')}
                           tooltips={{
                             interJob: METRIC_TOOLTIPS.FLOW_INTER_JOB,
                             pick: METRIC_TOOLTIPS.FLOW_PICKING,
@@ -454,7 +463,7 @@ function App() {
                       </div>
 
                       {/* Tier 3: Advanced Diagnostics */}
-                      <div className="pt-4 border-t border-slate-200/60">
+                      <div className="pt-4 border-t border-slate-800">
                         <AdvancedMetricsView
                           analysis={primaryAnalysis}
                           benchmarkAnalysis={secondaryAnalysis}
@@ -462,7 +471,7 @@ function App() {
                       </div>
 
                       {/* Tier 4: Secondary Velocity Metrics (The "Engine Room") */}
-                      <DashboardSection title="Secondary Velocity Metrics (Picking)" color="bg-slate-300">
+                      <DashboardSection title="Secondary Velocity Metrics (Picking)" color="bg-slate-800">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 opacity-80 hover:opacity-100 transition-opacity duration-300">
                           <MetricCard
                             title="UPH (Pure Active)"
@@ -524,18 +533,18 @@ function App() {
           )}
 
           {/* SHARED VISUAL EMPTY STATE FOR OTHER TABS */}
-          {currentTab !== 'dashboard' && (!primaryAnalysis || data.length === 0) && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 text-slate-400">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                <AlertTriangle className="w-8 h-8 text-slate-300" />
+          {currentTab !== 'dashboard' && currentTab !== 'guide' && (!primaryAnalysis || data.length === 0) && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 text-slate-500">
+              <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                <AlertTriangle className="w-8 h-8 text-slate-600" />
               </div>
-              <h3 className="text-xl font-medium text-slate-600">No Data Available</h3>
-              <p className="mt-2 max-w-sm mx-auto">
+              <h3 className="text-xl font-medium text-slate-300">No Data Available</h3>
+              <p className="mt-2 max-w-sm mx-auto text-slate-500">
                 Please upload a shift log file in the Dashboard tab to view the {currentTab.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase())}.
               </p>
               <button
                 onClick={() => setCurrentTab('dashboard')}
-                className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm font-medium"
+                className="mt-6 px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-sm text-sm font-medium"
               >
                 Go to Upload
               </button>
@@ -602,15 +611,7 @@ function App() {
                 </div>
               )}
 
-              {/* FORENSICS TAB */}
-              {currentTab === 'forensics' && (
-                <div className="p-8 max-w-7xl mx-auto">
-                  <WarehouseLogicView
-                    taskObjects={taskObjects}
-                    activityObjects={activityObjects}
-                  />
-                </div>
-              )}
+              {/* FORENSICS TAB REPLACED BY STITCH VIEW */}
 
               {currentTab === 'flow' && primaryAnalysis?.stats.picking.flowDetails && (
                 <div className="flex-1">
@@ -676,7 +677,87 @@ function App() {
                   })()}
                 </div>
               )}
+              {/* FORENSIC STITCH VIEW */}
+              {currentTab === 'forensic' && (
+                <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-black/20">
+                  <WarehouseLogicView
+                    tasks={taskObjects}
+                    activities={activityObjects}
+                    config={config}
+                  />
+                </div>
+              )}
+
+              {/* TIMELINE AUDIT STITCH VIEW */}
+              {currentTab === 'timeline' && (
+                <div className="flex-1 overflow-y-auto">
+                  <JobDetailsView
+                    data={primaryAnalysis.records}
+                    config={config}
+                  />
+                </div>
+              )}
+
+              {currentTab === 'settings' && (
+                <div className="p-8 max-w-4xl mx-auto w-full">
+                  <div className="bg-white dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-xl shadow-sm p-6">
+                    <div className="mb-6 pb-6 border-b border-border-light dark:border-border-dark">
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <Settings className="w-6 h-6 text-blue-600" />
+                        Global Settings
+                      </h2>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Adjust global shift parameters, job separation buffers, and legacy configurations.
+                      </p>
+                    </div>
+                    <ConfigPanel
+                      config={config}
+                      onChange={setConfig}
+                      suggestedBuffer={suggestedBuffer}
+                      visibleSections={['global', 'legacy']}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {currentTab === 'standards' && (
+                <div className="p-8 max-w-4xl mx-auto w-full">
+                  <div className="bg-white dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-xl shadow-sm p-6">
+                    <div className="mb-6 pb-6 border-b border-border-light dark:border-border-dark">
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <ClipboardList className="w-6 h-6 text-blue-600" />
+                        Engineered Labor Standards
+                      </h2>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Configure job workflow maps, engineered standards, and calculation groups.
+                      </p>
+                    </div>
+                    <ConfigPanel
+                      config={config}
+                      onChange={setConfig}
+                      suggestedBuffer={suggestedBuffer}
+                      visibleSections={['workflow', 'standards']}
+                    />
+                  </div>
+                </div>
+              )}
+              {currentTab === 'velocity' && (
+                <div className="flex-1 overflow-y-auto">
+                  <VelocityView
+                    analysis={primaryAnalysis}
+                    benchmark={secondaryAnalysis || undefined}
+                    isLive={false}
+                  />
+                </div>
+              )}
+
             </>
+          )}
+
+          {currentTab === 'guide' && (
+            <div className="flex-1 overflow-y-auto">
+              <UserGuideView />
+            </div>
           )}
 
         </div>

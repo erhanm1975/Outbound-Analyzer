@@ -9,12 +9,12 @@ export default {
         extend: {
             colors: {
                 primary: "#3B82F6",
-                "background-light": "#F3F4F6",
-                "background-dark": "#0F172A",
+                "background-light": "#f5f6f8",
+                "background-dark": "#111418", // Stitch Main BG
                 "surface-light": "#FFFFFF",
-                "surface-dark": "#1E293B",
-                "text-light": "#334155",
-                "text-dark": "#E2E8F0",
+                "surface-dark": "#151b23", // Stitch Card BG
+                "text-light": "#0f172a",
+                "text-dark": "#ffffff",
                 "accent-blue": "#EFF6FF",
                 "accent-blue-dark": "#1E3A8A",
                 "accent-green": "#F0FDF4",

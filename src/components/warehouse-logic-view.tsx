@@ -1,208 +1,238 @@
 import { useState, useMemo } from 'react';
-import type { TaskObject, ActivityObject } from '../types';
-import { Layers, List, Filter, Search } from 'lucide-react';
-import { RichTooltip } from './rich-tooltip';
+import type { TaskObject, ActivityObject, BufferConfig } from '../types';
+import { format } from 'date-fns';
+import { Search, Filter, Download, Table, Activity, ChevronDown, ChevronRight, AlertTriangle, Clock } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface WarehouseLogicViewProps {
-    taskObjects: TaskObject[];
-    activityObjects: ActivityObject[];
+    tasks: TaskObject[];
+    activities: ActivityObject[];
+    config: BufferConfig;
 }
 
-export function WarehouseLogicView({ taskObjects, activityObjects }: WarehouseLogicViewProps) {
-    const [activeTab, setActiveTab] = useState<'ACTIVITY' | 'TASKS'>('ACTIVITY');
+export function WarehouseLogicView({ tasks, activities, config }: WarehouseLogicViewProps) {
+    const [viewMode, setViewMode] = useState<'tasks' | 'activities'>('tasks');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterType, setFilterType] = useState<string>('ALL');
 
-    // Filters
-    const [searchUser, setSearchUser] = useState('');
-    const [searchJob, setSearchJob] = useState('');
-
-    // Filter Logic
+    // Filtering Logic
     const filteredTasks = useMemo(() => {
-        return taskObjects.filter(t => {
-            const matchUser = t.User.toLowerCase().includes(searchUser.toLowerCase());
-            const matchJob = t.JobCode.toLowerCase().includes(searchJob.toLowerCase());
-            return matchUser && matchJob;
+        return tasks.filter(t => {
+            const matchesSearch =
+                searchTerm === '' ||
+                t.JobCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                t.User.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                t.SKU.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                t.TaskType.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const matchesType = filterType === 'ALL' || t.TaskType === filterType;
+
+            return matchesSearch && matchesType;
         });
-    }, [taskObjects, searchUser, searchJob]);
+    }, [tasks, searchTerm, filterType]);
 
     const filteredActivities = useMemo(() => {
-        return activityObjects.filter(a => {
-            const matchUser = a.User.toLowerCase().includes(searchUser.toLowerCase());
-            const matchJob = (a.JobCode || '').toLowerCase().includes(searchJob.toLowerCase());
-            return matchUser && matchJob;
+        return activities.filter(a => {
+            const matchesSearch =
+                searchTerm === '' ||
+                (a.JobCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                a.User.toLowerCase().includes(searchTerm.toLowerCase());
+            return matchesSearch;
         });
-    }, [activityObjects, searchUser, searchJob]);
+    }, [activities, searchTerm]);
+
+    // Export Logic
+    const handleExport = () => {
+        const wb = XLSX.utils.book_new();
+
+        // Task Sheet
+        const taskWs = XLSX.utils.json_to_sheet(filteredTasks.map(t => ({
+            ...t,
+            Start: t.Start.toISOString(),
+            Finish: t.Finish.toISOString()
+        })));
+        XLSX.utils.book_append_sheet(wb, taskWs, "Tasks");
+
+        // Activity Sheet
+        const actWs = XLSX.utils.json_to_sheet(filteredActivities.map(a => ({
+            ...a,
+            Start: a.Start.toISOString(),
+            Finish: a.Finish.toISOString()
+        })));
+        XLSX.utils.book_append_sheet(wb, actWs, "Activities");
+
+        XLSX.writeFile(wb, `Forensic_Audit_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
+
+    // Helper: Duration Formatter
+    const fmt = (n: number) => n.toFixed(0);
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-            {/* Header / Controls */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/40 backdrop-blur-md p-6 rounded-3xl border border-white/60 shadow-sm">
+        <div className="p-6 bg-[#0F1115] min-h-full text-slate-300">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <Layers className="w-6 h-6 text-indigo-600" />
-                        Forensic Audit
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                        <Table className="w-6 h-6 text-blue-500" />
+                        Forensic Data Grid
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1">Detailed analysis of Task bricks and Activity sequences.</p>
+                    <p className="text-sm text-slate-500">Atomic Level Task & Activity Inspection</p>
                 </div>
-
-                <div className="flex gap-2 bg-slate-100/50 p-1 rounded-xl border border-slate-200/50">
+                <div className="flex gap-3">
+                    <div className="flex bg-[#1A1D21] p-1 rounded-lg border border-slate-800">
+                        <button
+                            onClick={() => setViewMode('tasks')}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${viewMode === 'tasks' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            Task Objects
+                        </button>
+                        <button
+                            onClick={() => setViewMode('activities')}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${viewMode === 'activities' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            Activity Objects
+                        </button>
+                    </div>
                     <button
-                        onClick={() => setActiveTab('ACTIVITY')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'ACTIVITY' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                        onClick={handleExport}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-emerald-900/20 transition-all"
                     >
-                        <Layers className="w-4 h-4" />
-                        Activity Objects
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('TASKS')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'TASKS' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <List className="w-4 h-4" />
-                        Task Objects
+                        <Download className="w-4 h-4" /> Export
                     </button>
                 </div>
             </div>
 
-            {/* Filter Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            {/* Controls */}
+            <div className="flex gap-4 mb-6">
+                <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input
                         type="text"
-                        placeholder="Filter by User..."
-                        value={searchUser}
-                        onChange={e => setSearchUser(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 bg-white rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700"
+                        placeholder={viewMode === 'tasks' ? "Search Task, SKU, Job, User..." : "Search Activity, Job, User..."}
+                        className="w-full bg-[#15171B] border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-sm focus:ring-1 focus:ring-blue-500"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <div className="relative">
-                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                        type="text"
-                        placeholder="Filter by Job Code..."
-                        value={searchJob}
-                        onChange={e => setSearchJob(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 bg-white rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700"
-                    />
-                </div>
-                <div className="flex items-center gap-4 text-xs text-slate-500">
-                    <span>Showing: <b>{activeTab === 'ACTIVITY' ? filteredActivities.length : filteredTasks.length}</b> records</span>
-                </div>
+                {viewMode === 'tasks' && (
+                    <div className="relative">
+                        <select
+                            className="appearance-none bg-[#15171B] border border-slate-800 rounded-lg pl-4 pr-10 py-2 text-sm font-medium focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                            value={filterType}
+                            onChange={e => setFilterType(e.target.value)}
+                        >
+                            <option value="ALL">All Task Types</option>
+                            <option value="Pick">Pick</option>
+                            <option value="Pack">Pack</option>
+                            <option value="Sort">Sort</option>
+                            <option value="Break">Break</option>
+                            <option value="No Activity">No Activity</option>
+                        </select>
+                        <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
+                    </div>
+                )}
             </div>
 
-            {/* Content Area */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[500px]">
+            {/* Content Grid */}
+            <div className="bg-[#15171B] border border-slate-800 rounded-xl overflow-hidden shadow-xl">
                 <div className="overflow-x-auto">
-                    {activeTab === 'ACTIVITY' ? (
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold">
-                                <tr>
-                                    <th className="px-4 py-3">User</th>
-                                    <th className="px-4 py-3">Activity</th>
-                                    <th className="px-4 py-3">Job Code</th>
-                                    <th className="px-4 py-3">Start</th>
-                                    <th className="px-4 py-3">Finish</th>
-                                    <th className="px-4 py-3 text-right">Prod Dur (s)</th>
-                                    <th className="px-4 py-3 text-right">Task Direct (s)</th>
-                                    <th className="px-4 py-3 text-right">Task Travel (s)</th>
-                                    <th className="px-4 py-3 text-right">Unprod Dur (s)</th>
-                                    <th className="px-4 py-3 text-right">Orders</th>
-                                    <th className="px-4 py-3 text-right">Tasks</th>
-                                    <th className="px-4 py-3 text-right">Units</th>
-                                    <th className="px-4 py-3 text-right">Avg Task (s)</th>
-                                    <th className="px-4 py-3 text-right">Avg Travel (s)</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {filteredActivities.slice(0, 100).map((act) => (
-                                    <tr key={act.id} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-4 py-2 font-medium text-slate-700">{act.User}</td>
-                                        <td className="px-4 py-2">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${act.Activity === 'Break' ? 'bg-rose-100 text-rose-700' :
-                                                act.Activity === 'No Activity' ? 'bg-amber-100 text-amber-700' :
-                                                    'bg-emerald-100 text-emerald-700'
-                                                }`}>
-                                                {act.Activity}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-2 font-mono text-xs text-slate-500">{act.JobCode || '-'}</td>
-                                        <td className="px-4 py-2 text-slate-500 text-xs">{act.Start.toLocaleTimeString()}</td>
-                                        <td className="px-4 py-2 text-slate-500 text-xs">{act.Finish.toLocaleTimeString()}</td>
-                                        <td className="px-4 py-2 text-right font-mono text-emerald-600">{act.ProductiveDurationSec.toFixed(1)}</td>
-                                        <td className="px-4 py-2 text-right font-mono text-slate-600">{act.TaskDirectTimeSec.toFixed(1)}</td>
-                                        <td className="px-4 py-2 text-right font-mono text-slate-600">{act.TaskTravelTimeSec.toFixed(1)}</td>
-                                        <td className="px-4 py-2 text-right font-mono text-rose-600">{act.UnproductiveDurationSec > 0 ? act.UnproductiveDurationSec.toFixed(1) : '-'}</td>
-                                        <td className="px-4 py-2 text-right text-slate-600">{act.NofOrders}</td>
-                                        <td className="px-4 py-2 text-right text-slate-600">{act.NofTasks}</td>
-                                        <td className="px-4 py-2 text-right text-slate-600">{act.NofUnits}</td>
-                                        <td className="px-4 py-2 text-right text-slate-600">{act.AvgTaskDurationSec.toFixed(1)}</td>
-                                        <td className="px-4 py-2 text-right text-slate-600">{act.AvgTravelDurationSec.toFixed(1)}</td>
-                                    </tr>
-                                ))}
-                                {filteredActivities.length > 100 && (
-                                    <tr>
-                                        <td colSpan={14} className="text-center py-4 text-slate-400 text-xs italic">
-                                            Showing first 100 records only for performance...
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    ) : (
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold">
+                    {viewMode === 'tasks' ? (
+                        <table className="w-full text-left text-xs">
+                            <thead className="bg-[#1A1D21] text-slate-400 uppercase font-bold tracking-wider border-b border-slate-800">
                                 <tr>
                                     <th className="px-4 py-3">User</th>
                                     <th className="px-4 py-3">Client</th>
+                                    <th className="px-4 py-3">Job Code</th>
+                                    <th className="px-4 py-3">Type</th>
                                     <th className="px-4 py-3">SKU</th>
                                     <th className="px-4 py-3">Location</th>
                                     <th className="px-4 py-3">Zone</th>
                                     <th className="px-4 py-3 text-right">Qty</th>
-                                    <th className="px-4 py-3">Job Code</th>
-                                    <th className="px-4 py-3">Task Type</th>
-                                    <th className="px-4 py-3">Start</th>
-                                    <th className="px-4 py-3">Finish</th>
-                                    <th className="px-4 py-3 text-right">Prod Dur (s)</th>
-                                    <th className="px-4 py-3 text-right">Direct (s)</th>
-                                    <th className="px-4 py-3 text-right">Travel (s)</th>
-                                    <th className="px-4 py-3 text-right">Unprod (s)</th>
+                                    <th className="px-4 py-3 text-right">Start</th>
+                                    <th className="px-4 py-3 text-right">Finish</th>
+                                    <th className="px-4 py-3 text-right text-emerald-500">Prod (s)</th>
+                                    <th className="px-4 py-3 text-right text-blue-400">Direct (s)</th>
+                                    <th className="px-4 py-3 text-right text-amber-500">Travel (s)</th>
+                                    <th className="px-4 py-3 text-right text-rose-500">Unprod (s)</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {filteredTasks.slice(0, 100).map((task, i) => (
-                                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-4 py-2 font-medium text-slate-700">{task.User}</td>
-                                        <td className="px-4 py-2 text-xs text-slate-500">{task.Client}</td>
-                                        <td className="px-4 py-2 text-xs font-mono text-slate-600">{task.SKU}</td>
-                                        <td className="px-4 py-2 font-mono text-xs text-slate-500">{task.Location}</td>
-                                        <td className="px-4 py-2 text-xs text-slate-500">{task.Zone}</td>
-                                        <td className="px-4 py-2 text-right text-xs text-slate-700">{task.Quantity}</td>
-                                        <td className="px-4 py-2 font-mono text-xs text-slate-500">{task.JobCode}</td>
-                                        <td className="px-4 py-2 text-xs text-slate-600">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${task.TaskType.toLowerCase().includes('break') || task.TaskType.toLowerCase().includes('delay')
-                                                    ? 'bg-rose-100 text-rose-700'
-                                                    : 'bg-slate-100 text-slate-600'
-                                                }`}>
-                                                {task.TaskType}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-2 text-slate-500 text-xs">{task.Start.toLocaleTimeString()}</td>
-                                        <td className="px-4 py-2 text-slate-500 text-xs">{task.Finish.toLocaleTimeString()}</td>
-                                        <td className="px-4 py-2 text-right font-mono text-emerald-600">{task.ProductiveDurationSec > 0 ? task.ProductiveDurationSec.toFixed(1) : '-'}</td>
-                                        <td className="px-4 py-2 text-right font-mono text-sky-600">{task.TaskDirectTimeSec > 0 ? task.TaskDirectTimeSec.toFixed(1) : '-'}</td>
-                                        <td className="px-4 py-2 text-right font-mono text-amber-600">{task.TaskTravelTimeSec > 0 ? task.TaskTravelTimeSec.toFixed(1) : '-'}</td>
-                                        <td className="px-4 py-2 text-right font-mono text-rose-600">{task.UnproductiveDurationSec > 0 ? task.UnproductiveDurationSec.toFixed(1) : '-'}</td>
+                            <tbody className="divide-y divide-slate-800/50">
+                                {filteredTasks.slice(0, 500).map((t, i) => {
+                                    const isUnprod = t.TaskType === 'Break' || t.TaskType === 'No Activity' || t.TaskType === 'Delay';
+                                    return (
+                                        <tr key={i} className="hover:bg-slate-800/30 transition-colors">
+                                            <td className="px-4 py-2 font-medium text-slate-300">{t.User}</td>
+                                            <td className="px-4 py-2 text-slate-400">{t.Client || '-'}</td>
+                                            <td className="px-4 py-2 font-mono text-slate-400">{t.JobCode}</td>
+                                            <td className="px-4 py-2">
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${t.TaskType === 'Break' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                                    t.TaskType === 'No Activity' ? 'bg-slate-700/30 text-slate-400 border-slate-600' :
+                                                        'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                                    }`}>
+                                                    {t.TaskType}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-2 font-mono text-slate-400">{t.SKU || '-'}</td>
+                                            <td className="px-4 py-2 font-mono text-slate-500">{t.Location || '-'}</td>
+                                            <td className="px-4 py-2 text-slate-500">{t.Zone || '-'}</td>
+                                            <td className="px-4 py-2 text-right font-mono">{t.Quantity}</td>
+                                            <td className="px-4 py-2 text-right font-mono text-slate-500">{format(t.Start, 'HH:mm:ss')}</td>
+                                            <td className="px-4 py-2 text-right font-mono text-slate-500">{format(t.Finish, 'HH:mm:ss')}</td>
+
+                                            <td className={`px-4 py-2 text-right font-mono font-bold ${t.ProductiveDurationSec > 0 ? 'text-emerald-400' : 'text-slate-700'}`}>
+                                                {fmt(t.ProductiveDurationSec)}
+                                            </td>
+                                            <td className={`px-4 py-2 text-right font-mono ${t.TaskDirectTimeSec > 0 ? 'text-blue-300' : 'text-slate-700'}`}>
+                                                {fmt(t.TaskDirectTimeSec)}
+                                            </td>
+                                            <td className={`px-4 py-2 text-right font-mono ${t.TaskTravelTimeSec > 0 ? 'text-amber-300' : 'text-slate-700'}`}>
+                                                {fmt(t.TaskTravelTimeSec)}
+                                            </td>
+                                            <td className={`px-4 py-2 text-right font-mono font-bold ${t.UnproductiveDurationSec > 0 ? 'text-rose-500' : 'text-slate-700'}`}>
+                                                {fmt(t.UnproductiveDurationSec)}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    ) : (
+                        <table className="w-full text-left text-xs">
+                            <thead className="bg-[#1A1D21] text-slate-400 uppercase font-bold tracking-wider border-b border-slate-800">
+                                <tr>
+                                    <th className="px-4 py-3">User</th>
+                                    <th className="px-4 py-3">Job Code</th>
+                                    <th className="px-4 py-3">Activity</th>
+                                    <th className="px-4 py-3 text-right">Start</th>
+                                    <th className="px-4 py-3 text-right">Finish</th>
+                                    <th className="px-4 py-3 text-right">Tasks</th>
+                                    <th className="px-4 py-3 text-right">Orders</th>
+                                    <th className="px-4 py-3 text-right">Units</th>
+                                    <th className="px-4 py-3 text-right text-emerald-500">Prod (s)</th>
+                                    <th className="px-4 py-3 text-right text-rose-500">Unprod (s)</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                                {filteredActivities.map((a, i) => (
+                                    <tr key={i} className="hover:bg-slate-800/30 transition-colors">
+                                        <td className="px-4 py-2 font-medium text-slate-300">{a.User}</td>
+                                        <td className="px-4 py-2 font-mono text-slate-400">{a.JobCode || 'Unassigned'}</td>
+                                        <td className="px-4 py-2 text-blue-300">{a.Activity}</td>
+                                        <td className="px-4 py-2 text-right font-mono text-slate-500">{format(a.Start, 'HH:mm:ss')}</td>
+                                        <td className="px-4 py-2 text-right font-mono text-slate-500">{format(a.Finish, 'HH:mm:ss')}</td>
+                                        <td className="px-4 py-2 text-right font-mono">{a.NofTasks}</td>
+                                        <td className="px-4 py-2 text-right font-mono">{a.NofOrders}</td>
+                                        <td className="px-4 py-2 text-right font-mono">{a.NofUnits}</td>
+                                        <td className="px-4 py-2 text-right font-mono font-bold text-emerald-400">{fmt(a.ProductiveDurationSec)}</td>
+                                        <td className="px-4 py-2 text-right font-mono font-bold text-rose-500">{fmt(a.UnproductiveDurationSec)}</td>
                                     </tr>
                                 ))}
-                                {filteredTasks.length > 100 && (
-                                    <tr>
-                                        <td colSpan={14} className="text-center py-4 text-slate-400 text-xs italic">
-                                            Showing first 100 records only for performance...
-                                        </td>
-                                    </tr>
-                                )}
                             </tbody>
                         </table>
                     )}
+                </div>
+                <div className="p-2 border-t border-slate-800 text-xs text-slate-500 text-center">
+                    Showing {viewMode === 'tasks' ? filteredTasks.length : filteredActivities.length} records (Limited to 500 for performance)
                 </div>
             </div>
         </div>

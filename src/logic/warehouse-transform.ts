@@ -26,7 +26,16 @@ const safeDiv = (num: number, den: number) => den === 0 ? 0 : num / den;
 // Core Logic
 // ----------------------------------------------------------------------
 
-export function processWarehouseLogic(records: ShiftRecord[]): { tasks: TaskObject[], activities: ActivityObject[] } {
+interface TransformConfig {
+    smoothingToleranceMs: number;
+    breakThresholdSec: number;
+    travelRatio: number;
+}
+
+export function processWarehouseLogic(
+    records: ShiftRecord[],
+    config: TransformConfig = { smoothingToleranceMs: 2000, breakThresholdSec: 300, travelRatio: 0.70 }
+): { tasks: TaskObject[], activities: ActivityObject[] } {
     if (records.length === 0) return { tasks: [], activities: [] };
 
     // 1. Sort Records: User ASC, Start ASC
@@ -76,8 +85,9 @@ export function processWarehouseLogic(records: ShiftRecord[]): { tasks: TaskObje
             let travelTime = 0;
 
             if (type.includes('pick')) {
-                directTime = normalizedDuration * CONFIG.RATIO_DIRECT;
-                travelTime = normalizedDuration * CONFIG.RATIO_TRAVEL;
+                directTime = normalizedDuration * (1 - config.travelRatio);
+                travelTime = normalizedDuration * config.travelRatio;
+
             } else if (type.includes('pack') || type.includes('sort')) {
                 directTime = normalizedDuration * 1.0;
                 travelTime = 0;
@@ -123,6 +133,107 @@ export function processWarehouseLogic(records: ShiftRecord[]): { tasks: TaskObje
         if (a.User > b.User) return 1;
         return a.Start.getTime() - b.Start.getTime();
     });
+
+    // ------------------------------------------------------------------
+    // Phase 1.2: Cluster Smoothing (Batch Pick Distribution)
+    // ------------------------------------------------------------------
+    // Fix for "Zero Duration" subsequent tasks in a batch sequence.
+    // If User, Job, Location, and SKU are identical and sequential, we distribute the total time.
+
+    const smoothedTasks: TaskObject[] = [];
+    if (taskObjects.length > 0) {
+        let cluster: TaskObject[] = [taskObjects[0]];
+
+        for (let i = 1; i < taskObjects.length; i++) {
+            const prev = cluster[cluster.length - 1];
+            const curr = taskObjects[i];
+
+            // Check for sequential (Start ~ Finish) OR simultaneous (Start ~ Start) execution
+            const timeDiffSeq = Math.abs(curr.Start.getTime() - prev.Finish.getTime());
+            const timeDiffConc = Math.abs(curr.Start.getTime() - prev.Start.getTime());
+
+            // Dynamic tolerance
+            const smoothingToleranceMs = (config.smoothingTolerance || 2) * 1000;
+
+            const isSameBatchSequence =
+                curr.User === prev.User &&
+                curr.JobCode.trim() === prev.JobCode.trim() &&
+                curr.Location.trim() === prev.Location.trim() &&
+                curr.SKU.trim() === prev.SKU.trim() &&
+                (timeDiffSeq < smoothingToleranceMs || timeDiffConc < smoothingToleranceMs); // Dynamic tolerance
+
+            if (isSameBatchSequence) {
+                cluster.push(curr);
+            } else {
+                // Process completed cluster
+                if (cluster.length > 1) {
+                    // Calculate totals
+                    const totalProd = cluster.reduce((sum, t) => sum + t.ProductiveDurationSec, 0);
+                    const totalDirect = cluster.reduce((sum, t) => sum + t.TaskDirectTimeSec, 0);
+                    const totalTravel = cluster.reduce((sum, t) => sum + t.TaskTravelTimeSec, 0);
+                    const totalUnprod = cluster.reduce((sum, t) => sum + t.UnproductiveDurationSec, 0);
+
+                    // Distribute
+                    const avgProd = totalProd / cluster.length;
+                    const avgDirect = totalDirect / cluster.length;
+                    const avgTravel = totalTravel / cluster.length;
+                    const avgUnprod = totalUnprod / cluster.length;
+
+                    // Determine envelope dates
+                    const minStart = new Date(Math.min(...cluster.map(t => t.Start.getTime())));
+                    const maxFinish = new Date(Math.max(...cluster.map(t => t.Finish.getTime())));
+
+                    cluster.forEach(t => {
+                        t.ProductiveDurationSec = avgProd;
+                        t.TaskDirectTimeSec = avgDirect;
+                        t.TaskTravelTimeSec = avgTravel;
+                        t.UnproductiveDurationSec = avgUnprod;
+                        t.Start = minStart;
+                        t.Finish = maxFinish;
+                        t.IsSimultaneous = true;
+                        // Mark as smoothed? Optional.
+                    });
+                }
+                smoothedTasks.push(...cluster);
+                cluster = [curr];
+            }
+        }
+        // Push final cluster
+        if (cluster.length > 1) {
+            const totalProd = cluster.reduce((sum, t) => sum + t.ProductiveDurationSec, 0);
+            const totalDirect = cluster.reduce((sum, t) => sum + t.TaskDirectTimeSec, 0);
+            const totalTravel = cluster.reduce((sum, t) => sum + t.TaskTravelTimeSec, 0);
+            const totalUnprod = cluster.reduce((sum, t) => sum + t.UnproductiveDurationSec, 0);
+
+            const avgProd = totalProd / cluster.length;
+            const avgDirect = totalDirect / cluster.length;
+            const avgTravel = totalTravel / cluster.length;
+            const avgUnprod = totalUnprod / cluster.length;
+
+            // Determine envelope dates
+            const minStart = new Date(Math.min(...cluster.map(t => t.Start.getTime())));
+            const maxFinish = new Date(Math.max(...cluster.map(t => t.Finish.getTime())));
+
+            cluster.forEach(t => {
+                t.ProductiveDurationSec = avgProd;
+                t.TaskDirectTimeSec = avgDirect;
+                t.TaskTravelTimeSec = avgTravel;
+                t.UnproductiveDurationSec = avgUnprod;
+                t.Start = minStart;
+                t.Finish = maxFinish;
+                t.IsSimultaneous = true;
+            });
+        }
+        smoothedTasks.push(...cluster);
+    }
+
+    // Replace original array with smoothed version for next steps
+    // (We re-assign to a new variable locally, but need to pass it to injectGaps)
+    // Since injectGaps takes `userRecs`, we need to make sure we use smoothedTasks downstream.
+
+    // Wait, the next step (Phase 1.5) uses `taskObjects` implicitly by grouping `taskObjects` into `rawByUser`.
+    // We should allow mutation or replace the array reference usage.
+    // Let's replace the `taskObjects` content or use `smoothedTasks` for the grouping.
 
     // ------------------------------------------------------------------
     // Phase 1.5: Gap Injection (Task Level Sequence Reconstruction)
@@ -208,7 +319,10 @@ export function processWarehouseLogic(records: ShiftRecord[]): { tasks: TaskObje
 
     // Group raw objects first
     const rawByUser = new Map<string, TaskObject[]>();
-    taskObjects.forEach(t => {
+    // Use smoothedTasks instead of taskObjects if available, otherwise fallback (safety)
+    const tasksToProcess = smoothedTasks.length > 0 ? smoothedTasks : taskObjects;
+
+    tasksToProcess.forEach(t => {
         if (!rawByUser.has(t.User)) rawByUser.set(t.User, []);
         rawByUser.get(t.User)!.push(t);
     });

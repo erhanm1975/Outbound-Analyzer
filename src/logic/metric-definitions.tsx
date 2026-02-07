@@ -16,333 +16,389 @@ export const TooltipContainer = ({ title, children, formula }: { title: string, 
     </div>
 );
 
+// Rich Tooltip Component (Based on Forensic OS Design)
+export const RichTooltipContainer = ({
+    title,
+    description,
+    includes,
+    excludes,
+    formula
+}: {
+    title: string,
+    description: string,
+    includes?: string[],
+    excludes?: string[],
+    formula?: string
+}) => (
+    <div className="text-left w-64">
+        {/* Header */}
+        <div className="mb-3 border-b border-slate-700/50 pb-2">
+            <h4 className="text-sm font-bold text-white leading-tight">{title}</h4>
+        </div>
+
+        {/* Description */}
+        <p className="text-xs text-slate-300 mb-3 leading-relaxed">
+            {description}
+        </p>
+
+        {/* Includes / Excludes Section */}
+        {(includes || excludes) && (
+            <div className="space-y-2 mb-3 bg-slate-800/50 p-2 rounded border border-slate-700/50">
+                {includes && includes.length > 0 && (
+                    <div className="flex gap-2 items-start">
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mt-0.5 min-w-[50px]">Includes:</span>
+                        <div className="text-[10px] text-slate-300 leading-tight">
+                            {includes.join(", ")}
+                        </div>
+                    </div>
+                )}
+                {excludes && excludes.length > 0 && (
+                    <div className="flex gap-2 items-start">
+                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider mt-0.5 min-w-[50px]">Excludes:</span>
+                        <div className="text-[10px] text-slate-300 leading-tight">
+                            {excludes.join(", ")}
+                        </div>
+                    </div>
+                )}
+            </div>
+        )}
+
+        {/* Formula */}
+        {formula && (
+            <div className="bg-[#0B1120] p-2.5 rounded border border-blue-900/30 font-mono">
+                <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[9px] font-semibold text-blue-500 uppercase tracking-widest">Formula</span>
+                </div>
+                <div className="text-[10px] text-blue-300 break-words leading-relaxed">
+                    {formula}
+                </div>
+            </div>
+        )}
+    </div>
+);
+
 export const METRIC_TOOLTIPS = {
     // HERO METRICS
+    PRODUCTIVE_UPH: (
+        <RichTooltipContainer
+            title="Productive Picked UPH"
+            description="Throughput calculation measuring speed during active working periods only."
+            includes={["Active Picking Time", "Travel between picks", "Short handling gaps (< 5m)"]}
+            excludes={["Breaks", "Lunch", "Long delays (> 5m)", "Meeting time"]}
+            formula="Total Units ÷ (Active Time - Breaks)"
+        />
+    ),
+
+    FLOOR_UPH: (
+        <RichTooltipContainer
+            title="Floor Picked UPH"
+            description="Throughput calculation measuring speed over the entire presence on the floor."
+            includes={["Active Picking", "Travel", "All Breaks", "All Delays", "Idle Time"]}
+            formula="Total Units ÷ (Last Task Finish - First Task Start)"
+        />
+    ),
+
+    OUTPUT_DENSITY: (
+        <RichTooltipContainer
+            title="Pick Density"
+            description="Measure of volumetric efficiency per stop. High density indicates effective slotting and batching."
+            formula="Total Units ÷ Unique Locations Visited"
+        />
+    ),
+
     PICKING_UPH_OCCUPANCY: (
-        <TooltipContainer title="Picking Speed (Occupancy)" formula="Total Volume / Σ(User Shift Spans)">
-            <p>Total Units picked divided by the Sum of User Shift Hours.</p>
-            <ul className="list-disc pl-3 text-slate-400 mt-1">
-                <li><strong>Units:</strong> Sum of 'Quantity' for all tasks.</li>
-                <li><strong>Hours:</strong> Sum of each user's floor time (Last Scan - First Scan), including gaps/breaks.</li>
-            </ul>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Picking Speed (Occupancy)"
+            description="Total Units picked divided by the Sum of User Shift Hours."
+            includes={["All Paid Hours"]}
+            formula="Total Volume ÷ Σ(User Shift Spans)"
+        />
     ),
 
     PICKING_UTILIZATION: (
-        <TooltipContainer title="Picker Efficiency" formula="(Active Interval Time / Total Shift Span) * 100">
-            <p>Percentage of shift time spent on active tasks vs idle/gaps.</p>
-            <ul className="list-disc pl-3 text-slate-400 mt-1">
-                <li><strong>Active:</strong> Merged duration of overlapping tasks (Active Wall-Clock).</li>
-                <li><strong>Total:</strong> Sum of User Shift Hours.</li>
-                <li>Capped at 100% to reflect true saturation.</li>
-            </ul>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Picker Efficiency"
+            description="Percentage of shift time spent on active tasks vs idle/gaps."
+            includes={["Active Wall-Clock Time"]}
+            excludes={["Idle Gaps"]}
+            formula="(Active Interval Time / Total Shift Span) * 100"
+        />
     ),
 
     PACKING_UPH_OCCUPANCY: (
-        <TooltipContainer title="Packing Speed (Occupancy)" formula="Total Volume / Σ(User Shift Spans)">
-            <p>Total Units packed divided by Total Shift Hours.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Packing Speed (Occupancy)"
+            description="Total Units packed divided by Total Shift Hours."
+            formula="Total Volume ÷ Σ(User Shift Spans)"
+        />
     ),
 
     PACKING_UTILIZATION: (
-        <TooltipContainer title="Packer Efficiency" formula="(Active Interval Time / Total Shift Span) * 100">
-            <p>Percentage of shift time spent actively packing.</p>
-            <p className="text-slate-400 italic">Merges overlapping tasks to avoid &gt;100% errors.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Packer Efficiency"
+            description="Percentage of shift time spent actively packing."
+            formula="(Active Interval Time / Total Shift Span) * 100"
+        />
     ),
 
     // DENSITY
     VISIT_DENSITY_UNIT: (
-        <TooltipContainer title="Visit Density (Per Unit)" formula="Distinct Locs / Total Units">
-            <p>How many unique locations are visited per unit picked.</p>
-            <p className="text-slate-400">Lower is better (indicates dense picking).</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Visit Density (Per Unit)"
+            description="How many unique locations are visited per unit picked. Lower is better."
+            formula="Distinct Locs ÷ Total Units"
+        />
     ),
 
     VISIT_DENSITY_LINE: (
-        <TooltipContainer title="Visit Density (Per Line)" formula="Distinct Locs / Total Tasks">
-            <p>How many unique locations are visited per task line.</p>
-            <p className="text-slate-400">1.0 = Single Pick per Visit.<br />Lower = Multi-Pick Batching.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Visit Density (Per Line)"
+            description="How many unique locations are visited per task line."
+            formula="Distinct Locs ÷ Total Tasks"
+        />
     ),
 
     // TIER 2
     TPH: (
-        <TooltipContainer title="Throughput (Tasks/Hr)" formula="Total Tasks / Active Hours">
-            <p>Speed of Task Execution relative to floor hours.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Throughput (Tasks/Hr)"
+            description="Speed of Task Execution relative to floor hours."
+            formula="Total Tasks ÷ Active Hours"
+        />
     ),
 
     // VELOCITY
     UPH_PURE_ACTIVE: (
-        <TooltipContainer title="Pure Active UPH" formula="Total Units / Sum(Task Durations)">
-            <p>Theoretical Max Speed excluding ALL gaps and travel.</p>
-            <p className="text-orange-300">"Speed Limit" of the process.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Pure Active UPH"
+            description="Theoretical Max Speed excluding ALL gaps and travel. The 'Speed Limit' of the process."
+            formula="Total Units ÷ Sum(Task Durations)"
+        />
     ),
 
     UPH_HOURLY_AVG: (
-        <TooltipContainer title="Hourly Flow Capacity" formula="Avg(Volume per Active Hour)">
-            <p>Average throughput capability per hour of activity.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Hourly Flow Capacity"
+            description="Average throughput capability per hour of activity."
+            formula="Avg(Volume per Active Hour)"
+        />
     ),
 
     DYNAMIC_FLOW_UPH: (
-        <TooltipContainer title="Dynamic Flow Rate" formula="Avg(Units / Active Users) per 10m">
-            <p>Flow-based calculation that normalizes for lunch/break dips.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Dynamic Flow Rate"
+            description="Flow-based calculation that normalizes for lunch/break dips."
+            formula="Avg(Units / Active Users) per 10m"
+        />
     ),
 
     // TASK FLOW
     FLOW_INTER_JOB: (
-        <TooltipContainer title="Inter-Job Gap">
-            <p>Average time elapsed between finishing one job and starting the next.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Inter-Job Gap"
+            description="Average time elapsed between finishing one job and starting the next."
+        />
     ),
     FLOW_TRAVEL: (
-        <TooltipContainer title="Travel Time">
-            <p>Estimated movement time between locations.</p>
-            <p className="text-slate-500 italic">Derived via P10 Heuristic.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Travel Time"
+            description="Estimated movement time between locations. Derived via P10 Heuristic."
+        />
     ),
     FLOW_PICKING: (
-        <TooltipContainer title="Picking Execution">
-            <p>Time spent physically performing the pick at the bin.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Picking Execution"
+            description="Time spent physically performing the pick at the bin."
+        />
     ),
     FLOW_SORTING: (
-        <TooltipContainer title="Sorting Process">
-            <p>Time spent sorting items (Batch Normalized).</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Sorting Process"
+            description="Time spent sorting items (Batch Normalized)."
+        />
     ),
     FLOW_PACKING: (
-        <TooltipContainer title="Packing Process">
-            <p>Time spent packing the order.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Packing Process"
+            description="Time spent packing the order."
+        />
     ),
 
     // WORKLOAD
     WORKLOAD_TOTAL_JOBS: (
-        <TooltipContainer title="Job Volume">
-            <p>Total number of discrete Jobs (Orders/Batches).</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Job Volume"
+            description="Total number of discrete Jobs (Orders/Batches)."
+        />
     ),
     WORKLOAD_UNITS_JOB: (
-        <TooltipContainer title="Job Size" formula="Total Units / Total Jobs">
-            <p>Average quantity of units per job.</p>
-            <p className="text-emerald-300">Larger jobs = Better efficiency.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Job Size"
+            description="Average quantity of units per job. Larger jobs = Better efficiency."
+            formula="Total Units ÷ Total Jobs"
+        />
     ),
     WORKLOAD_SKUS_JOB: (
-        <TooltipContainer title="Job Complexity">
-            <p>Average distinct SKUs per job.</p>
-            <p className="text-slate-400">High SKUs + Low Units = High Complexity Mix.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Job Complexity"
+            description="Average distinct SKUs per job. High SKUs + Low Units = High Complexity Mix."
+        />
     ),
     WORKLOAD_LOCS_JOB: (
-        <TooltipContainer title="Job Density">
-            <p>Average distinct locations visited per job.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Job Density"
+            description="Average distinct locations visited per job."
+        />
     ),
     WORKLOAD_ORDERS_JOB: (
-        <TooltipContainer title="Batch Size">
-            <p>Average number of customer orders combined into a single job.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Batch Size"
+            description="Average number of customer orders combined into a single job."
+        />
     ),
     WORKLOAD_TASKS_JOB: (
-        <TooltipContainer title="Work Content">
-            <p>Average tasks (lines) required to complete a job.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Work Content"
+            description="Average tasks (lines) required to complete a job."
+        />
     ),
 
     // --- ADVANCED METRICS ---
     TRANSITION_FRICTION: (
-        <TooltipContainer title="Transition Friction" formula="Active Task Time / Total Job Duration">
-            <p>Measures the efficiency of the job execution.</p>
-            <p>Values approaching <strong>1.0</strong> indicate minimal travel/setup waste.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Transition Friction"
+            description="Measures the efficiency of the job execution. Values approaching 1.0 indicate minimal travel/setup waste."
+            formula="Active Task Time ÷ Total Job Duration"
+        />
     ),
     PICK_TO_PACK_SYNC: (
-        <TooltipContainer title="Pick-to-Pack Sync" formula="Min Pack Start - Max Pick Finish">
-            <p>The time gap between the end of picking and the start of packing for a wave.</p>
-            <p className="text-slate-400">Lower is better. Negative values indicate optimal overlapping flow.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Pick-to-Pack Sync"
+            description="The time gap between the end of picking and the start of packing for a wave."
+            formula="Min Pack Start - Max Pick Finish"
+        />
     ),
     ACTIVE_SCAN_RATIO: (
-        <TooltipContainer title="Active Scan Ratio" formula="Total Task Duration / Total Shift Span">
-            <p>Percentage of shift time spent on verifiable system tasks.</p>
-            <p>Higher is better (indicates high engagement).</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Active Scan Ratio"
+            description="Percentage of shift time spent on verifiable system tasks. Higher is better."
+            formula="Total Task Duration ÷ Total Shift Span"
+        />
     ),
     SKU_BATCHABILITY: (
-        <TooltipContainer title="SKU Batchability" formula="Total Units / Distinct SKUs">
-            <p>Density metric indicating how many units are picked per unique SKU location visit.</p>
-            <p>Higher values indicate easier-to-batch profiles.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="SKU Batchability"
+            description="Density metric indicating how many units are picked per unique SKU location visit."
+            formula="Total Units ÷ Distinct SKUs"
+        />
     ),
     INTER_JOB_GAP: (
-        <TooltipContainer title="Inter-Job Gap">
-            <p>The average interruption or downtime between completing one job and starting the next.</p>
-            <p className="text-slate-400">Lower is better (less downtime).</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Inter-Job Gap"
+            description="The average interruption or downtime between completing one job and starting the next."
+        />
     ),
     JOB_CYCLE_TIME: (
-        <TooltipContainer title="Job Cycle Time">
-            <p>The cadence or rhythm of job induction (Time between Start Job A and Start Job B).</p>
-            <p>Lower usually indicates a faster, steadier flow.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Job Cycle Time"
+            description="The cadence or rhythm of job induction (Time between Start Job A and Start Job B)."
+        />
     ),
     JOB_DURATION: (
-        <TooltipContainer title="Job Duration">
-            <p>The wall-clock time required to complete a single job (Start to Finish).</p>
-            <p>Pure execution time.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Job Duration"
+            description="The wall-clock time required to complete a single job (Start to Finish)."
+        />
     ),
 
     // --- AUDIT METRICS ---
     AUDIT_P10: (
-        <TooltipContainer title="P10 Baseline (Process Time)">
-            <p>The duration of the fastest 10% of tasks.</p>
-            <p className="text-slate-400 mt-1">Represents pure process time with minimal travel friction.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="P10 Baseline (Process Time)"
+            description="The duration of the fastest 10% of tasks. Represents pure process time with minimal travel friction."
+        />
     ),
     AUDIT_AVG: (
-        <TooltipContainer title="Average Duration">
-            <p>The arithmetic mean of all task durations.</p>
-            <p className="text-slate-400 mt-1">Heavily influenced by long travel times or outliers.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Average Duration"
+            description="The arithmetic mean of all task durations. Heavily influenced by long travel times or outliers."
+        />
     ),
     AUDIT_TRAVEL: (
-        <TooltipContainer title="Calculated Travel Time" formula="Average - P10 Baseline">
-            <p>The estimated portion of task duration attributed to travel.</p>
-            <p className="text-slate-400 mt-1">Derived by subtracting the pure process time (P10) from the average.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Calculated Travel Time"
+            description="The estimated portion of task duration attributed to travel."
+            formula="Average - P10 Baseline"
+        />
     ),
     AUDIT_MEDIAN: (
-        <TooltipContainer title="Median Duration">
-            <p>The 50th percentile task duration.</p>
-            <p className="text-slate-400 mt-1">A robust measure of central tendency, less affected by outliers than the average.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Median Duration"
+            description="The 50th percentile task duration. A robust measure of central tendency."
+        />
     ),
 
     // --- SHIFT HEALTH METRICS ---
     SHIFT_TOTAL_UNITS: (
-        <TooltipContainer title="Total Units">
-            <p>The sum of 'Quantity' for all valid records in the dataset.</p>
-        </TooltipContainer>
+        <RichTooltipContainer title="Total Units" description="The sum of 'Quantity' for all valid records in the dataset." />
     ),
     SHIFT_DISTINCT_USERS: (
-        <TooltipContainer title="Distinct Users">
-            <p>The count of unique User IDs identified in the shift.</p>
-            <p className="text-slate-400">Includes both Pickers and Packers.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Distinct Users"
+            description="The count of unique User IDs identified in the shift (Pickers and Packers)."
+        />
     ),
     SHIFT_UNIQUE_VISITS: (
-        <TooltipContainer title="Unique Visits">
-            <p>The total number of location visits.</p>
-            <p className="text-slate-400">Calculated as the sum of distinct locations visited per job.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Unique Visits"
+            description="The total number of location visits (sum of distinct locations visited per job)."
+        />
     ),
     SHIFT_PHYSICAL_FOOTPRINT: (
-        <TooltipContainer title="Physical Footprint">
-            <p>The total number of unique location addresses accessed during the shift.</p>
-            <p className="text-slate-400">Indicates the spatial spread of the workload.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Physical Footprint"
+            description="The total number of unique location addresses accessed during the shift."
+        />
     ),
 
     // --- GRID COLUMNS ---
-
-    // JOB BREAKDOWN
-    COL_JOB_CODE: (
-        <TooltipContainer title="Job Code">
-            <p>Unique identifier for the job batch or wave.</p>
-        </TooltipContainer>
-    ),
-    COL_JOB_TYPE: (
-        <TooltipContainer title="Job Type">
-            <p>Functional categorization (e.g., Picking, Packing, Replenishment).</p>
-        </TooltipContainer>
-    ),
-    COL_SOURCE: (
-        <TooltipContainer title="Source Intelligence">
-            <p>Indicates whether the job was planned by AI (Optimization Engine) or manually created.</p>
-        </TooltipContainer>
-    ),
-    COL_ORDERS: (
-        <TooltipContainer title="Order Count">
-            <p>Number of discrete customer orders contained within this job.</p>
-        </TooltipContainer>
-    ),
-    COL_LOCATIONS: (
-        <TooltipContainer title="Unique Locations">
-            <p>Count of distinct warehouse locations visited during this job.</p>
-        </TooltipContainer>
-    ),
-    COL_SKUS: (
-        <TooltipContainer title="Unique SKUs">
-            <p>Count of distinct items (SKUs) handled in this job.</p>
-        </TooltipContainer>
-    ),
-    COL_UNITS: (
-        <TooltipContainer title="Total Units">
-            <p>Sum of all item quantities processed in this job.</p>
-        </TooltipContainer>
-    ),
+    COL_JOB_CODE: <RichTooltipContainer title="Job Code" description="Unique identifier for the job batch or wave." />,
+    COL_JOB_TYPE: <RichTooltipContainer title="Job Type" description="Functional categorization (e.g., Picking, Packing)." />,
+    COL_SOURCE: <RichTooltipContainer title="Source Intelligence" description="Indicates whether the job was planned by AI or manually." />,
+    COL_ORDERS: <RichTooltipContainer title="Order Count" description="Number of discrete customer orders contained within this job." />,
+    COL_LOCATIONS: <RichTooltipContainer title="Unique Locations" description="Count of distinct warehouse locations visited during this job." />,
+    COL_SKUS: <RichTooltipContainer title="Unique SKUs" description="Count of distinct items (SKUs) handled in this job." />,
+    COL_UNITS: <RichTooltipContainer title="Total Units" description="Sum of all item quantities processed in this job." />,
 
     // USER PERFORMANCE
-    COL_RANK: (
-        <TooltipContainer title="Performance Rank">
-            <p>Relative ranking based on UPH (Occupancy) for the current filtered period.</p>
-        </TooltipContainer>
-    ),
-    COL_USER: (
-        <TooltipContainer title="Associate">
-            <p>Name or ID of the warehouse associate.</p>
-        </TooltipContainer>
-    ),
+    COL_RANK: <RichTooltipContainer title="Performance Rank" description="Relative ranking based on UPH (Occupancy)." />,
+    COL_USER: <RichTooltipContainer title="Associate" description="Name or ID of the warehouse associate." />,
     COL_UPH_OCC: (
-        <TooltipContainer title="UPH (Occupancy)" formula="Total Volume / Shift Span">
-            <p>Units Per Hour calculated against total floor time (First Scan to Last Scan).</p>
-            <p className="text-slate-400 italic">Includes all gaps, breaks, and idle time.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="UPH (Occupancy)"
+            description="Units Per Hour calculated against total floor time (First Scan to Last Scan)."
+            formula="Total Volume ÷ Shift Span"
+        />
     ),
-    COL_VOLUME: (
-        <TooltipContainer title="Total Volume">
-            <p>Total units processed by the user.</p>
-        </TooltipContainer>
-    ),
-    COL_SPAN: (
-        <TooltipContainer title="Shift Span">
-            <p>Wall-clock time elapsed between the user's first and last activity.</p>
-        </TooltipContainer>
-    ),
+    COL_VOLUME: <RichTooltipContainer title="Total Volume" description="Total units processed by the user." />,
+    COL_SPAN: <RichTooltipContainer title="Shift Span" description="Wall-clock time elapsed between the user's first and last activity." />,
     COL_DIRECT_TIME: (
-        <TooltipContainer title="Active Time">
-            <p>Sum of durations where the user was actively performing tasks.</p>
-            <p className="text-slate-400">Excludes gaps between tasks.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Active Time"
+            description="Sum of durations where the user was actively performing tasks."
+            excludes={["Gaps between tasks"]}
+        />
     ),
     COL_UTIL_PERCENT: (
-        <TooltipContainer title="Utilization %" formula="(Active Time / Shift Span) * 100">
-            <p>Percentage of time spent on active work vs. idle/gap time.</p>
-        </TooltipContainer>
+        <RichTooltipContainer
+            title="Utilization %"
+            description="Percentage of time spent on active work vs. idle/gap time."
+            formula="(Active Time / Shift Span) * 100"
+        />
     ),
 
     // ACTIVITY MATRIX
-    COL_MATRIX_USER: (
-        <TooltipContainer title="Active Users">
-            <p>Users who had activity during the shift.</p>
-        </TooltipContainer>
-    ),
-    COL_MATRIX_HOUR: (
-        <TooltipContainer title="Hour Block">
-            <p>Activity aggregated by hour of day (00:00 - 23:00).</p>
-        </TooltipContainer>
-    ),
-    COL_MATRIX_TOTAL: (
-        <TooltipContainer title="Shift Total">
-            <p>Total activity (Tasks or Volume) for the user across the entire shift.</p>
-        </TooltipContainer>
-    )
+    COL_MATRIX_USER: <RichTooltipContainer title="Active Users" description="Users who had activity during the shift." />,
+    COL_MATRIX_HOUR: <RichTooltipContainer title="Hour Block" description="Activity aggregated by hour of day (00:00 - 23:00)." />,
+    COL_MATRIX_TOTAL: <RichTooltipContainer title="Shift Total" description="Total activity (Tasks or Volume) for the user across the entire shift." />
 };

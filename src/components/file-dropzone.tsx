@@ -69,7 +69,7 @@ export function FileDropzone({ onFilesSelected, isProcessing }: FileDropzoneProp
             />
 
             <div className="flex flex-col items-center gap-3">
-                <div className="p-3 bg-white rounded-full shadow-sm border border-slate-100">
+                <div className="p-3 bg-white dark:bg-slate-800 rounded-full shadow-sm border border-slate-100 dark:border-slate-700">
                     <Upload className={cn("w-6 h-6", isDragActive ? "text-blue-500" : "text-slate-400")} />
                 </div>
                 <div className="space-y-1">

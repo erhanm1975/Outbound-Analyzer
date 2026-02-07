@@ -370,6 +370,26 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
 
         const subsetDirectHours = subsetDirectSec / 3600;
 
+        // 3a. Productive Time (Direct + Gaps < 5m)
+        let subsetProductiveSec = 0;
+        subset.forEach(d => {
+            // Direct Time
+            const dur = Math.max(0, differenceInSeconds(d.Finish, d.Start));
+            subsetProductiveSec += dur;
+
+            // Add Gap if it's "Productive" (i.e., not a break)
+            // We assume breakThreshold is 300s (5m) by default.
+            // enriched record has rawGap in minutes.
+            if (d.rawGap) {
+                const gapSec = d.rawGap * 60;
+                // Use config from closure if available, else default 300
+                const threshold = config.breakThreshold || 300;
+                if (gapSec < threshold) {
+                    subsetProductiveSec += gapSec;
+                }
+            }
+        });
+
         // 4. Locations
         const distinctLocsSet = new Set<string>();
         subset.forEach(d => {
@@ -403,7 +423,10 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
         }
 
         // Calc Metrics
-        const vUph = subsetSpanHours > 0 ? vol / subsetSpanHours : 0;
+        const vFloorUph = subsetSpanHours > 0 ? vol / subsetSpanHours : 0; // "Floor UPH"
+        const vProductiveHours = subsetProductiveSec / 3600;
+        const vProductiveUph = vProductiveHours > 0 ? vol / vProductiveHours : 0; // "Productive UPH"
+
         const vUphPure = subsetDirectHours > 0 ? vol / subsetDirectHours : 0;
         const vTph = subsetSpanHours > 0 ? taskCount / subsetSpanHours : 0;
 
@@ -412,6 +435,8 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
         const vUtil = subsetSpanHours > 0 ? ((activeWallClockSec / 3600) / subsetSpanHours) * 100 : 0;
 
         const vLocsPerUnit = vol > 0 ? distLocs / vol : 0;
+        const vOutputDensity = distLocs > 0 ? vol / distLocs : 0; // "Output Density"
+
         const vAvgTaskDuration = taskCount > 0 ? (subsetDirectSec / taskCount) / 60 : 0; // Minutes
 
         // NEW: GSPT Averages
@@ -429,7 +454,9 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
         const vFlow = hMap.size > 0 ? sumFlow / hMap.size : 0;
 
         return {
-            uph: Number(vUph.toFixed(2)),
+            uph: Number(vFloorUph.toFixed(2)), // Keep backward compat (Floor UPH)
+            floorUPH: Number(vFloorUph.toFixed(2)), // NEW
+            productiveUPH: Number(vProductiveUph.toFixed(2)), // NEW
             uphPure: Number(vUphPure.toFixed(2)),
             uphHourlyFlow: Number(vFlow.toFixed(2)),
             dynamicIntervalUPH: 0, // Fallback
@@ -439,6 +466,7 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
             totalActiveTime: Number(subsetSpanHours.toFixed(2)),
             directTime: Number((subsetDirectSec / 60).toFixed(2)),
             distinctLocations: distLocs,
+            outputDensity: Number(vOutputDensity.toFixed(2)), // NEW
             totalTasks: taskCount,
             locationsPerUnit: Number(vLocsPerUnit.toFixed(2)),
             avgTaskDuration: Number(vAvgTaskDuration.toFixed(2)),
@@ -774,6 +802,9 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
             uph: globalStats.uph,
             uphPure: globalStats.uphPure,
             uphHourlyFlow: globalStats.uphHourlyFlow,
+            productiveUPH: globalStats.productiveUPH, // NEW
+            floorUPH: globalStats.floorUPH, // NEW
+            outputDensity: globalStats.outputDensity, // NEW
             picking: pickingStats,
             sorting: sortingStats, // NEW
             packing: packingStats,

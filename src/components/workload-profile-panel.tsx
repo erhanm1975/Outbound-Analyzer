@@ -63,10 +63,10 @@ export function WorkloadProfilePanel({ stats, benchmarkStats, className }: Workl
     ];
 
     return (
-        <div className={cn("bg-white/40 backdrop-blur-md border border-white/60 rounded-3xl p-6 shadow-sm", className)}>
+        <div className={cn("bg-white/40 dark:bg-slate-800/40 backdrop-blur-md border border-white/60 dark:border-slate-700/60 rounded-3xl p-6 shadow-sm", className)}>
             <div className="flex items-center gap-2 mb-6">
                 <div className="h-4 w-1 rounded-full bg-teal-500"></div>
-                <h3 className="text-slate-500 font-semibold uppercase tracking-wider text-xs">Workload Profile</h3>
+                <h3 className="text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-xs">Workload Profile</h3>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
@@ -78,19 +78,19 @@ export function WorkloadProfilePanel({ stats, benchmarkStats, className }: Workl
 
                     return (
                         <div key={i} className="flex flex-col">
-                            <span className="text-xs text-slate-400 font-medium mb-1 flex items-center gap-1.5">
+                            <span className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-1 flex items-center gap-1.5">
                                 {m.icon}
                                 {m.label}
                                 {m.tooltip && (
                                     <RichTooltip
                                         content={m.tooltip}
                                         className="ml-1"
-                                        trigger={<Info className="w-3 h-3 text-slate-300 hover:text-slate-500 cursor-help" />}
+                                        trigger={<Info className="w-3 h-3 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 cursor-help" />}
                                     />
                                 )}
                             </span>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-xl font-bold text-slate-700">{m.value}</span>
+                                <span className="text-xl font-bold text-slate-700 dark:text-slate-200">{m.value}</span>
 
                                 {m.benchmark && Math.abs(percent) > 0.1 && (
                                     <span className={cn(

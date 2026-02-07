@@ -8,9 +8,10 @@ interface RichTooltipProps {
     children?: React.ReactNode;
     className?: string; // Wrapper class
     trigger?: React.ReactNode; // Optional custom trigger (default: Info icon)
+    style?: React.CSSProperties; // Added for dynamic styles (e.g. width)
 }
 
-export function RichTooltip({ content, children, className, trigger }: RichTooltipProps) {
+export function RichTooltip({ content, children, className, trigger, style }: RichTooltipProps) {
     const [isVisible, setIsVisible] = useState(false);
     const [position, setPosition] = useState({ top: 0, left: 0 });
     const triggerRef = useRef<HTMLDivElement>(null);
@@ -49,6 +50,7 @@ export function RichTooltip({ content, children, className, trigger }: RichToolt
             className={cn("inline-flex items-center cursor-help", className)}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={() => setIsVisible(false)}
+            style={style}
         >
             {/* If children provided, wrap them. If not, showing standard Info icon */}
             {children || trigger || <Info className="w-4 h-4 text-slate-400 hover:text-slate-600 transition-colors" />}

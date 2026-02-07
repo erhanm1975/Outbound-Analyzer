@@ -1,112 +1,82 @@
 import { useState, useMemo } from 'react';
-import { type EnrichedShiftRecord } from '../types';
-import { ChevronRight, ChevronDown, Clock, Truck, ShoppingCart, User, Archive } from 'lucide-react';
+import { type EnrichedShiftRecord, type BufferConfig } from '../types';
+import { processWarehouseLogic } from '../logic/warehouse-transform';
+import { ChevronRight, ChevronDown, Archive, AlertTriangle, User, Search, Printer, Download, Clock, Filter, Activity, Box, Truck, Layers, Zap } from 'lucide-react';
 import { format } from 'date-fns';
+import { JobDetailPanel } from './job-detail-panel';
+import { RichTooltip } from './rich-tooltip';
 
 interface JobDetailsViewProps {
     data: EnrichedShiftRecord[];
+    config: BufferConfig;
 }
 
-interface JobGroup {
-    id: string; // user-jobcode-timestamp (unique key)
-    user: string;
-    jobCode: string;
-    taskType: string;
-    firstTaskStart: Date;
-    lastTaskFinish: Date;
-    durationSec: number;
-    distinctLocations: number;
-    interJobGapSec: number; // Gap leading INTO this job
-    intraJobBreakSec: number; // accumulated breaks > 5min WITHIN the job
-    tasks: EnrichedShiftRecord[];
-}
-
-export function JobDetailsView({ data }: JobDetailsViewProps) {
+export function JobDetailsView({ data, config }: JobDetailsViewProps) {
     const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
-    const [maxItems, setMaxItems] = useState(50); // Pagination/Limit for performance
+    const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedUser, setSelectedUser] = useState<string>('ALL');
 
-    const jobGroups = useMemo(() => {
-        const groups: JobGroup[] = [];
-        let currentGroup: JobGroup | null = null;
+    // 1. Process Data using Legacy Logic (Standards)
+    const { activities, tasks, stats, users } = useMemo(() => {
+        // Run the core logic to get standardized objects
+        const { tasks: allTasks, activities: allActivities } = processWarehouseLogic(data);
 
-        const calculateIntraBreak = (tasks: EnrichedShiftRecord[]) => {
-            let totalBreak = 0;
-            for (let i = 1; i < tasks.length; i++) {
-                const gap = (tasks[i].Start.getTime() - tasks[i - 1].Finish.getTime()) / 1000;
-                if (gap > 300) totalBreak += gap; // > 5 mins
-            }
-            return totalBreak;
-        };
+        // Generate Users List
+        const users = Array.from(new Set(allActivities.map(a => a.User))).sort();
 
-        const getTaskTypeLabel = (tasks: EnrichedShiftRecord[]) => {
-            const uniqueTypes = new Set(tasks.map(t => t.TaskType));
-            if (uniqueTypes.size === 1) return Array.from(uniqueTypes)[0];
+        // Filter Key Generation helper
+        const getFilterKey = (t: any) => `${t.User} ${t.JobCode}`.toLowerCase();
 
-            const parts: string[] = [];
-            const hasPick = tasks.some(t => t.TaskType?.toLowerCase().includes('pick'));
-            const hasSort = tasks.some(t => t.TaskType?.toLowerCase().includes('sort'));
-            const hasPack = tasks.some(t => t.TaskType?.toLowerCase().includes('pack'));
-
-            if (hasPick) parts.push('P');
-            if (hasSort) parts.push('S');
-            if (hasPack) parts.push('P');
-
-            return parts.length > 0 ? parts.join('|') : 'Mix';
-        };
-
-        // Ensure sorted by User
-        const sortedData = [...data].sort((a, b) => a.User.localeCompare(b.User) || a.Start.getTime() - b.Start.getTime());
-
-        sortedData.forEach((record, idx) => {
-            const isNewJob = !currentGroup
-                || currentGroup.user !== record.User
-                || currentGroup.jobCode !== record.JobCode
-                || record.gapType === 'TRANSITION';
-
-            if (isNewJob) {
-                if (currentGroup) {
-                    // Finalize previous group
-                    const group = currentGroup as JobGroup; // Assertion to help compiler
-                    group.lastTaskFinish = group.tasks[group.tasks.length - 1].Finish;
-                    group.durationSec = (group.lastTaskFinish.getTime() - group.firstTaskStart.getTime()) / 1000;
-                    group.distinctLocations = new Set(group.tasks.map(t => t.Location)).size;
-                    group.intraJobBreakSec = calculateIntraBreak(group.tasks);
-                    group.taskType = getTaskTypeLabel(group.tasks);
-                    groups.push(group);
-                }
-
-                currentGroup = {
-                    id: `${record.User}-${record.JobCode}-${record.Start.getTime()}`,
-                    user: record.User,
-                    jobCode: record.JobCode,
-                    taskType: '',
-                    firstTaskStart: record.Start,
-                    lastTaskFinish: record.Finish,
-                    durationSec: 0,
-                    distinctLocations: 0,
-                    interJobGapSec: record.interJobGapSec || 0,
-                    intraJobBreakSec: 0,
-                    tasks: [record]
-                };
-            } else {
-                if (currentGroup) {
-                    (currentGroup as JobGroup).tasks.push(record);
-                }
-            }
+        // Filter Logic
+        const filteredActivities = allActivities.filter(a => {
+            const matchesUser = selectedUser === 'ALL' || a.User === selectedUser;
+            const matchesSearch = searchTerm === '' || getFilterKey(a).includes(searchTerm.toLowerCase());
+            return matchesUser && matchesSearch;
         });
 
-        if (currentGroup) {
-            const group = currentGroup as JobGroup;
-            group.lastTaskFinish = group.tasks[group.tasks.length - 1].Finish;
-            group.durationSec = (group.lastTaskFinish.getTime() - group.firstTaskStart.getTime()) / 1000;
-            group.distinctLocations = new Set(group.tasks.map(t => t.Location)).size;
-            group.intraJobBreakSec = calculateIntraBreak(group.tasks);
-            group.taskType = getTaskTypeLabel(group.tasks);
-            groups.push(group);
-        }
+        // Group Tasks by Activity ID (or JobCode + User + Start proximity?)
+        // processWarehouseLogic fills gaps but doesn't explicitly link tasks to Activity ID in the return types yet, 
+        // relying on sorting/time. However, `ActivityObject` has Start/Finish.
+        // Let's filter tasks that fall within the activity windows for the UI.
 
-        return groups;
-    }, [data]);
+        // Optimization: Create a Task Map or efficient lookup?
+        // Since both are sorted, we can slice. But for now, simple filter for safety.
+        // Actually, distinct Jobs shouldn't overlap for a single user.
+
+        const tasksByActivity = new Map<string, typeof allTasks>();
+
+        // Map tasks to activities based on Time Window & User
+        // This is necessary because `processWarehouseLogic` separates them.
+        filteredActivities.forEach(act => {
+            const actTasks = allTasks.filter(t =>
+                t.User === act.User &&
+                t.Start >= act.Start &&
+                t.Finish <= act.Finish
+            );
+            tasksByActivity.set(act.id, actTasks);
+        });
+
+        // Calculate Global Stats from Filtered Activities
+        const totalTime = filteredActivities.reduce((acc, a) => acc + (a.Finish.getTime() - a.Start.getTime()) / 1000, 0);
+        const totalProc = filteredActivities.reduce((acc, a) => acc + a.ProductiveDurationSec, 0); // Is this total active?
+        const totalDirect = filteredActivities.reduce((acc, a) => acc + a.TaskDirectTimeSec, 0);
+        const totalTravel = filteredActivities.reduce((acc, a) => acc + a.TaskTravelTimeSec, 0);
+        const totalUnprod = filteredActivities.reduce((acc, a) => acc + a.UnproductiveDurationSec, 0);
+
+        // Efficiency = Direct / (Direct + Unproductive)? Or Productive / TotalSpan?
+        // Spec: Efficiency = (Active Time / Net Duration) * 100
+
+        const totalTasksCount = filteredActivities.reduce((acc, a) => acc + a.NofTasks, 0);
+
+        return {
+            activities: filteredActivities,
+            tasks: tasksByActivity,
+            stats: { totalTime, totalTasks: totalTasksCount, totalProc, totalDirect, totalTravel, totalUnprod },
+            users
+        };
+
+    }, [data, searchTerm, selectedUser]);
 
     const toggleExpand = (id: string) => {
         const next = new Set(expandedJobs);
@@ -115,178 +85,332 @@ export function JobDetailsView({ data }: JobDetailsViewProps) {
         setExpandedJobs(next);
     };
 
-    const displayedGroups = jobGroups.slice(0, maxItems);
+    // Format Helpers
+    const fmtDur = (sec: number) => {
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
+    };
 
+    // --- RENDER ---
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center text-slate-800">
-                <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Archive className="w-6 h-6 text-purple-600" />
-                    Job Forensic Audit
-                </h3>
-                <span className="text-sm text-slate-500">
-                    Showing {displayedGroups.length} of {jobGroups.length} Jobs
-                </span>
+        <div className="bg-[#0F1115] min-h-screen text-slate-300 font-sans p-6">
+
+            {/* 1. BREADCRUMBS & HEADER */}
+            <div className="max-w-7xl mx-auto mb-8">
+                <div className="flex items-center gap-2 text-xs text-slate-500 mb-2 font-medium">
+                    <span className="hover:text-slate-300 cursor-pointer">Home</span> /
+                    <span className="hover:text-slate-300 cursor-pointer">Audits</span> /
+                    <span className="text-slate-300">Chronological User Audit</span>
+                </div>
+                <div className="flex justify-between items-end">
+                    <h1 className="text-2xl font-bold text-white tracking-tight">Timeline Forensic Audit</h1>
+                    <div className="flex gap-3">
+                        <button className="flex items-center gap-2 px-4 py-2 bg-[#1A1D21] hover:bg-[#25292E] border border-slate-800 rounded-lg text-xs font-bold text-slate-300 transition-colors">
+                            <Printer className="w-4 h-4" /> Print
+                        </button>
+                        <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-bold text-white shadow-lg shadow-blue-900/20 transition-all">
+                            <Download className="w-4 h-4" /> Export Report
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="grid grid-cols-12 gap-4 p-4 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <div className="col-span-1"></div> {/* Expand Arrow */}
-                    <div className="col-span-2">User</div>
-                    <div className="col-span-1">Type</div>
-                    <div className="col-span-1">Job Code</div>
-                    <div className="col-span-1 text-right">Tasks</div>
-                    <div className="col-span-1 text-right">Inter-Job Gap</div>
-                    <div className="col-span-1 text-right">Net Dur</div>
-                    <div className="col-span-1 text-right">Avg Task Dur</div>
-                    <div className="col-span-1 text-right">Breaks</div>
-                    <div className="col-span-2 text-right">Start / Finish</div>
-                </div>
+            {/* 2. DASHBOARD CONTEXT ROW */}
+            <div className="max-w-7xl mx-auto mb-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-                <div className="divide-y divide-slate-100">
-                    {displayedGroups.map(job => (
-                        <div key={job.id} className="group transition-colors hover:bg-slate-50/50">
-                            {/* Job Row */}
-                            <div
-                                className="grid grid-cols-12 gap-4 p-4 items-center cursor-pointer"
-                                onClick={() => toggleExpand(job.id)}
-                            >
-                                <div className="col-span-1 flex justify-center">
-                                    <button className="p-1 rounded-full hover:bg-slate-200 text-slate-400">
-                                        {expandedJobs.has(job.id) ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-                                    </button>
+                {/* User Selector & Summary */}
+                <div className="lg:col-span-8 bg-[#15171B] border border-slate-800 rounded-xl p-5 shadow-xl">
+                    <div className="flex justify-between items-start mb-6">
+                        <div className="flex items-center gap-4">
+                            <div className="relative">
+                                <div className="w-12 h-12 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center">
+                                    <User className="w-6 h-6 text-slate-400" />
                                 </div>
-                                <div className="col-span-2 font-medium text-slate-700 flex items-center gap-2 truncate" title={job.user}>
-                                    <User className="w-3 h-3 text-slate-400" />
-                                    {job.user}
-                                </div>
-                                <div className="col-span-1">
-                                    <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-600 truncate block w-fit">
-                                        {job.taskType}
-                                    </span>
-                                </div>
-                                <div className="col-span-1 font-mono text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded w-fit truncate">
-                                    {job.jobCode}
-                                </div>
-                                <div className="col-span-1 text-right font-medium text-slate-600 px-2">
-                                    {job.tasks.length}
-                                </div>
-                                <div className="col-span-1 text-right font-medium flex justify-end items-center gap-1">
-                                    {(() => {
-                                        const gap = job.interJobGapSec;
-                                        if (gap <= 0) return <span className="text-slate-300">-</span>;
-                                        const min = gap / 60;
-                                        if (min > 25) return <span className="text-rose-600 font-bold bg-rose-50 px-1 rounded border border-rose-100" title="Likely Lunch Break">🍽️ {min.toFixed(0)}m</span>;
-                                        if (min > 10) return <span className="text-orange-600 font-bold bg-orange-50 px-1 rounded border border-orange-100" title="Likely Rest Break">☕ {min.toFixed(0)}m</span>;
-                                        if (min > 5) return <span className="text-amber-600 font-medium">{min.toFixed(1)}m</span>;
-                                        return <span className="text-slate-400">{min.toFixed(1)}m</span>;
-                                    })()}
-                                </div>
-                                <div className="col-span-1 text-right font-medium text-slate-700">
-                                    {((job.durationSec - job.intraJobBreakSec) / 60).toFixed(2)}m
-                                </div>
-                                <div className="col-span-1 text-right font-medium text-emerald-600">
-                                    {(() => {
-                                        const isPicking = job.taskType === 'Picking';
-                                        const denom = isPicking ? job.distinctLocations : job.tasks.length;
-                                        const val = denom > 0 ? (job.durationSec - job.intraJobBreakSec) / denom : 0;
-                                        return val > 0 ? `${val.toFixed(1)}s` : '-';
-                                    })()}
-                                </div>
-                                <div className="col-span-1 text-right font-medium text-rose-600">
-                                    {job.intraJobBreakSec > 0 ? (
-                                        <span className="bg-rose-50 px-2 py-1 rounded border border-rose-100 font-bold text-xs">
-                                            ⚠️ {(job.intraJobBreakSec / 60).toFixed(1)}m
-                                        </span>
-                                    ) : <span className="text-slate-300 text-xs">-</span>}
-                                </div>
-                                <div className="col-span-2 text-right text-xs text-slate-500">
-                                    <div>{format(job.firstTaskStart, 'HH:mm:ss')}</div>
-                                    <div className="text-slate-400">{format(job.lastTaskFinish, 'HH:mm:ss')}</div>
+                                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-[#15171B] rounded-full"></div>
+                            </div>
+                            <div>
+                                <select
+                                    className="bg-transparent text-white font-bold text-lg border-none focus:ring-0 p-0 cursor-pointer hover:text-blue-400 transition-colors"
+                                    value={selectedUser}
+                                    onChange={(e) => setSelectedUser(e.target.value)}
+                                >
+                                    <option value="ALL">All Warehouse Users</option>
+                                    {users.map(u => (
+                                        <option key={u} value={u}>{u}</option>
+                                    ))}
+                                </select>
+                                <div className="text-xs text-slate-500 font-mono mt-1">
+                                    {selectedUser === 'ALL'
+                                        ? `${users.length} Active Users • ${data[0]?.Warehouse || 'Unknown Warehouse'}`
+                                        : `User ${selectedUser} • ${data.find(d => d.User === selectedUser)?.Warehouse || 'Unknown Warehouse'}`
+                                    }
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Expanded Task Details */}
-                            {expandedJobs.has(job.id) && (
-                                <div className="px-4 py-3 bg-slate-50 border-t border-slate-100">
-                                    {/* Grouping Logic */}
-                                    {(() => {
-                                        const buckets: Record<string, EnrichedShiftRecord[]> = {
-                                            'Picking': [],
-                                            'Sorting': [],
-                                            'Packing': [],
-                                            'Other': []
-                                        };
-                                        job.tasks.forEach(t => {
-                                            const type = t.TaskType?.toLowerCase() || '';
-                                            if (type.includes('pick')) buckets['Picking'].push(t);
-                                            else if (type.includes('sort')) buckets['Sorting'].push(t);
-                                            else if (type.includes('pack')) buckets['Packing'].push(t);
-                                            else buckets['Other'].push(t);
-                                        });
+                        {/* Search & Filter */}
+                        <div className="flex gap-2">
+                            <div className="relative">
+                                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                <input
+                                    type="text"
+                                    placeholder="Search timeline..."
+                                    className="bg-[#0A0C0E] border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-600 w-64"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <button className="p-2 bg-[#0A0C0E] border border-slate-800 rounded-lg text-slate-400 hover:text-white hover:border-slate-700">
+                                <Filter className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
 
-                                        return Object.entries(buckets).map(([bucketName, tasks]) => {
-                                            if (tasks.length === 0) return null;
-                                            // Process Label: "Pick (s)", "Sort (s)", "Pack (s)"
-                                            const actionLabel = bucketName === 'Other' ? 'Process (s)' : `${bucketName.slice(0, 4)} (s)`;
+                    {/* Separation Line */}
+                    <div className="h-px bg-slate-800 mb-6"></div>
 
-                                            // Buckets colors
-                                            const headerColorStr = bucketName === 'Picking' ? 'text-blue-600 border-blue-200' :
-                                                bucketName === 'Sorting' ? 'text-indigo-600 border-indigo-200' :
-                                                    bucketName === 'Packing' ? 'text-purple-600 border-purple-200' : 'text-slate-500 border-slate-200';
+                    {/* Efficiency Breakdown Bar */}
+                    <div className="mb-4">
+                        <div className="flex justify-between text-xs font-bold text-slate-400 mb-2">
+                            <span>User Efficiency Breakdown</span>
+                            <span className="text-slate-500">Total Logged: {fmtDur(stats.totalTime)}</span>
+                        </div>
+                        <div className="h-3 w-full bg-[#0A0C0E] rounded-full overflow-hidden flex">
+                            <RichTooltip
+                                className="h-full"
+                                style={{ width: `${(stats.totalDirect / stats.totalTime) * 100}%` }}
+                                content={<span className="font-bold">Direct Process: {((stats.totalDirect / stats.totalTime) * 100).toFixed(1)}% ({fmtDur(stats.totalDirect)})</span>}
+                            >
+                                <div className="w-full h-full bg-emerald-500" />
+                            </RichTooltip>
 
+                            <RichTooltip
+                                className="h-full"
+                                style={{ width: `${(stats.totalTravel / stats.totalTime) * 100}%` }}
+                                content={<span className="font-bold">Travel: {((stats.totalTravel / stats.totalTime) * 100).toFixed(1)}% ({fmtDur(stats.totalTravel)})</span>}
+                            >
+                                <div className="w-full h-full bg-slate-500" />
+                            </RichTooltip>
+
+                            <RichTooltip
+                                className="h-full"
+                                style={{ width: `${(stats.totalUnprod / stats.totalTime) * 100}%` }}
+                                content={<span className="font-bold">Unproductive / Gaps: {((stats.totalUnprod / stats.totalTime) * 100).toFixed(1)}% ({fmtDur(stats.totalUnprod)})</span>}
+                            >
+                                <div className="w-full h-full bg-rose-500" />
+                            </RichTooltip>
+                        </div>
+                        {/* Legend */}
+                        <div className="flex gap-6 mt-3 text-[10px] uppercase font-bold tracking-wider text-slate-500">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                <span className="text-slate-300">Direct Process</span>
+                                <span className="text-slate-500 ml-1">{fmtDur(stats.totalDirect)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-slate-500" />
+                                <span className="text-slate-300">Travel</span>
+                                <span className="text-slate-500 ml-1">{fmtDur(stats.totalTravel)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-rose-500" />
+                                <span className="text-slate-300">Unproductive / Gaps</span>
+                                <span className="text-slate-500 ml-1">{fmtDur(stats.totalUnprod)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* KPI Card */}
+                <div className="lg:col-span-4 bg-[#15171B] border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between">
+                    <div className="absolute top-0 right-0 p-4">
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                            <Activity className="w-4 h-4 text-blue-500" />
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Avg Task Duration</div>
+                        <div className="text-4xl font-bold text-white tracking-tight">
+                            {stats.totalTasks > 0 ? (stats.totalProc / stats.totalTasks).toFixed(1) : 0}<span className="text-2xl text-slate-500 ml-1">s</span>
+                        </div>
+                    </div>
+                    <div className="mt-4 flex items-center gap-2 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-3 py-2 rounded-lg w-fit">
+                        <Activity className="w-3 h-3" />
+                        <span>Based on {stats.totalTasks} Tasks</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* 3. HEADERS */}
+            <div className="max-w-7xl mx-auto grid grid-cols-12 gap-4 px-6 py-3 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                <div className="col-span-1">Status</div>
+                <div className="col-span-2">Job Code</div>
+                <div className="col-span-1">Type</div>
+                <div className="col-span-1 text-center">Tasks</div>
+                <div className="col-span-2 text-center">Stats</div>
+                <div className="col-span-2 text-right">Start Time</div>
+                <div className="col-span-2 text-right">Finish Time</div>
+                <div className="col-span-1 text-right">Duration</div>
+            </div>
+
+            {/* 4. JOB LIST (CARDS) */}
+            <div className="max-w-7xl mx-auto space-y-3">
+                {activities.map(act => {
+                    const isExpanded = expandedJobs.has(act.id);
+                    const getTypeColor = (t: string) => {
+                        if (t.includes('pick')) return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+                        if (t.includes('sort')) return 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+                        if (t.includes('pack')) return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
+                        return 'text-slate-400 bg-slate-500/10 border-slate-500/20';
+                    };
+                    const typeStyle = getTypeColor(act.Activity.toLowerCase());
+                    const duration = (act.Finish.getTime() - act.Start.getTime()) / 1000;
+
+                    // Calc Efficiency: (Direct + Travel) / Duration
+                    const activeSec = act.TaskDirectTimeSec + act.TaskTravelTimeSec;
+                    const efficiency = duration > 0 ? Math.min(100, (activeSec / duration) * 100) : 0;
+
+                    return (
+                        <div key={act.id} className={`bg-[#15171B] border transition-all duration-200 rounded-lg overflow-hidden ${isExpanded ? 'border-blue-500/40 shadow-blue-900/10' : 'border-slate-800 hover:border-slate-700'}`}>
+
+                            {/* MASTER ROW */}
+                            <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center cursor-pointer hover:bg-slate-800/20 transition-colors"
+                                onClick={() => setSelectedJobId(act.id)}
+                            >
+                                {/* Status */}
+                                <div className="col-span-1 flex items-center gap-3">
+                                    <button
+                                        className={`w-6 h-6 rounded flex items-center justify-center transition-transform ${isExpanded ? 'bg-slate-800 rotate-90 text-white' : 'bg-transparent text-slate-500'}`}
+                                        onClick={(e) => { e.stopPropagation(); toggleExpand(act.id); }}
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                {/* Job Code */}
+                                <div className="col-span-2 text-sm font-bold text-white font-mono tracking-wide">
+                                    {act.JobCode || 'Unassigned'}
+                                </div>
+                                {/* Type */}
+                                <div className="col-span-1">
+                                    <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase ${typeStyle} truncate block text-center`}>
+                                        {act.Activity.split('|')[0] || 'N/A'}
+                                    </span>
+                                </div>
+                                {/* Tasks */}
+                                <div className="col-span-1 text-center text-sm font-bold text-slate-300">{act.NofTasks}</div>
+
+                                {/* NEW: Stats Badges (Units / Orders) */}
+                                <div className="col-span-2 flex justify-center gap-2">
+                                    <div className="flex items-center gap-1 bg-slate-800/50 px-2 py-1 rounded border border-slate-700/50">
+                                        <Box className="w-3 h-3 text-emerald-500" />
+                                        <span className="text-[10px] font-mono text-slate-300">{act.NofUnits}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 bg-slate-800/50 px-2 py-1 rounded border border-slate-700/50">
+                                        <Layers className="w-3 h-3 text-blue-500" />
+                                        <span className="text-[10px] font-mono text-slate-300">{act.NofOrders}</span>
+                                    </div>
+                                </div>
+
+                                {/* Times */}
+                                <div className="col-span-2 text-right text-xs font-mono text-slate-400">{format(act.Start, 'hh:mm:ss a')}</div>
+                                <div className="col-span-2 text-right text-xs font-mono text-slate-400">{format(act.Finish, 'hh:mm:ss a')}</div>
+                                {/* Duration */}
+                                <div className="col-span-1 text-right text-sm font-bold text-white">{fmtDur(duration)}</div>
+                            </div>
+
+                            {/* DETAIL VIEW (EXPANDED) */}
+                            {isExpanded && tasks.has(act.id) && (
+                                <div className="bg-[#0A0C0E] border-t border-slate-800 p-4 animate-in slide-in-from-top-1">
+                                    {/* Inner Header */}
+                                    <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[9px] uppercase font-bold text-slate-600 border-b border-slate-800 mb-2">
+                                        <div className="col-span-1">Type</div>
+                                        <div className="col-span-3">SKU / Activity</div>
+                                        <div className="col-span-3">Location / Batch Status</div>
+                                        <div className="col-span-1 text-right">Start</div>
+                                        <div className="col-span-1 text-right">Finish</div>
+                                        <div className="col-span-1 text-right">Direct</div>
+                                        <div className="col-span-1 text-right">Travel</div>
+                                        <div className="col-span-1 text-right">Unprod</div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        {tasks.get(act.id)!.map((t, i) => {
+                                            const isIdle = t.TaskType === 'No Activity';
+                                            const isBreak = t.TaskType === 'Break';
+                                            const isBatch = t.IsBatchNormalized;
+
+                                            if (isIdle || isBreak) {
+                                                const dur = t.OriginalDurationSec; // FIX: Use Original Duration for gaps/idle
+                                                return (
+                                                    <div key={i} className={`grid grid-cols-12 gap-4 px-4 py-2 rounded border items-center ${isBreak ? 'bg-rose-500/10 border-rose-500/20' : 'bg-slate-800/30 border-slate-800'}`}>
+                                                        <div className="col-span-1">
+                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase flex w-fit items-center gap-1 ${isBreak ? 'text-rose-400 border-rose-500/20' : 'text-slate-500 border-slate-700/50'}`}>
+                                                                {isBreak ? <Clock className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                                                                {isBreak ? 'Brk' : 'Idle'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="col-span-6 text-xs text-rose-300/70 italic">
+                                                            {isBreak ? 'Scheduled Break' : 'Non-Productive Time (Gap > 60s)'}
+                                                        </div>
+                                                        <div className="col-span-1 text-right text-xs font-mono text-slate-500">{format(t.Start, 'HH:mm:ss')}</div>
+                                                        <div className="col-span-1 text-right text-xs font-mono text-slate-500">{format(t.Finish, 'HH:mm:ss')}</div>
+                                                        <div className="col-span-3 text-right text-xs font-bold text-rose-400">{dur.toFixed(0)}s</div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            // Productive Row
                                             return (
-                                                <div key={bucketName} className="mb-4 last:mb-0">
-                                                    <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 border-b pb-1 ${headerColorStr}`}>
-                                                        {bucketName} Tasks ({tasks.length})
-                                                    </h4>
-                                                    <table className="w-full text-xs text-slate-600">
-                                                        <thead>
-                                                            <tr className="text-slate-400 border-b border-slate-100">
-                                                                <th className="text-left py-2 pl-2">Type</th>
-                                                                <th className="text-left py-2">SKU</th>
-                                                                <th className="text-left py-2">Location</th>
-                                                                <th className="text-right py-2">Start</th>
-                                                                <th className="text-right py-2">Finish</th>
-                                                                <th className="text-right py-2">{actionLabel}</th>
-                                                                <th className="text-right py-2 pr-2">Travel (s)</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-slate-50">
-                                                            {tasks.map((task, i) => (
-                                                                <tr key={i} className="hover:bg-slate-50">
-                                                                    <td className="py-2 pl-2 font-mono text-[10px] text-slate-500">{task.TaskType}</td>
-                                                                    <td className="py-2 font-mono text-xs font-medium text-slate-700">{task.SKU}</td>
-                                                                    <td className="py-2 font-mono text-xs text-slate-600">{task.Location}</td>
-                                                                    <td className="py-2 text-right font-mono text-slate-400">{format(task.Start, 'HH:mm:ss')}</td>
-                                                                    <td className="py-2 text-right font-mono text-slate-400">{format(task.Finish, 'HH:mm:ss')}</td>
-                                                                    <td className="py-2 text-right font-medium text-slate-700">{(task.processTimeSec ?? 0).toFixed(1)}</td>
-                                                                    <td className="py-2 text-right text-slate-500 pr-2">{(task.travelTimeSec ?? 0) > 0 ? (task.travelTimeSec ?? 0).toFixed(1) : '-'}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                                <div key={i} className="grid grid-cols-12 gap-4 px-4 py-2 hover:bg-slate-800/50 rounded transition-colors items-center border-b border-slate-900/50 last:border-0">
+                                                    <div className="col-span-1">
+                                                        <span className="text-[9px] font-bold text-blue-400 border border-blue-900/50 bg-blue-900/20 px-1.5 py-0.5 rounded uppercase truncate flex items-center justify-center gap-1 text-center">
+                                                            {t.IsSimultaneous && <Zap className="w-3 h-3 text-amber-400 fill-amber-400/20" />}
+                                                            {t.TaskType.substring(0, 4)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="col-span-3">
+                                                        <div className="text-xs font-bold text-slate-200 font-mono">{t.SKU}</div>
+                                                        {t.OrderCode && t.OrderCode !== 'Unknown' && (
+                                                            <div className="text-[9px] text-slate-500 font-mono mt-0.5">ORD: {t.OrderCode}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="col-span-3 flex items-center gap-2">
+                                                        <div className="text-xs text-slate-500 font-mono">{t.Location}</div>
+                                                        {isBatch && (
+                                                            <div className="flex items-center gap-1 bg-indigo-500/10 border border-indigo-500/20 rounded px-1.5 py-0.5">
+                                                                <Layers className="w-3 h-3 text-indigo-400" />
+                                                                <span className="text-[9px] text-indigo-300 font-bold">Batch {t.BatchSize}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="col-span-1 text-right text-xs text-slate-500 font-mono">{format(t.Start, 'HH:mm:ss')}</div>
+                                                    <div className="col-span-1 text-right text-xs text-slate-500 font-mono">{format(t.Finish, 'HH:mm:ss')}</div>
+
+                                                    {/* Metrics Columns */}
+                                                    <div className="col-span-1 text-right text-xs font-bold text-emerald-400">{t.TaskDirectTimeSec.toFixed(0)}s</div>
+                                                    <div className="col-span-1 text-right text-xs font-bold text-blue-400">{t.TaskTravelTimeSec > 0 ? `${t.TaskTravelTimeSec.toFixed(0)}s` : '-'}</div>
+                                                    <div className="col-span-1 text-right text-xs font-bold text-rose-400">{t.UnproductiveDurationSec > 0 ? `${t.UnproductiveDurationSec.toFixed(0)}s` : '-'}</div>
                                                 </div>
                                             );
-                                        });
-                                    })()}
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
-                    ))}
-                </div>
-
-                {displayedGroups.length < jobGroups.length && (
-                    <div className="p-4 bg-slate-50 border-t border-slate-200 text-center">
-                        <button
-                            onClick={() => setMaxItems(prev => prev + 50)}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                        >
-                            Load More Jobs...
-                        </button>
-                    </div>
-                )}
+                    );
+                })}
             </div>
+
+            {/* 5. SIDE PANEL */}
+            {selectedJobId && activities.find(a => a.id === selectedJobId) && (
+                <JobDetailPanel
+                    job={activities.find(a => a.id === selectedJobId)!}
+                    tasks={tasks.get(selectedJobId) || []}
+                    onClose={() => setSelectedJobId(null)}
+                />
+            )}
+
         </div>
     );
 }

@@ -57,11 +57,12 @@ export function TaskFlowVisual({
         tooltip?: React.ReactNode
     ) => {
         const colorClasses = {
-            blue: { border: 'border-blue-200', bg: 'bg-blue-50/80', text: 'text-blue-600', icon: 'text-blue-500' },
-            amber: { border: 'border-amber-200', bg: 'bg-amber-50/80', text: 'text-amber-600', icon: 'text-amber-500' },
-            cyan: { border: 'border-cyan-200', bg: 'bg-cyan-50/80', text: 'text-cyan-600', icon: 'text-cyan-500' },
-            purple: { border: 'border-purple-200', bg: 'bg-purple-50/80', text: 'text-purple-600', icon: 'text-purple-500' },
-            slate: { border: 'border-slate-200', bg: 'bg-slate-50/80', text: 'text-slate-600', icon: 'text-slate-500' }
+
+            blue: { border: 'border-blue-200 dark:border-blue-800', bg: 'bg-blue-50/80 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400', icon: 'text-blue-500 dark:text-blue-400' },
+            amber: { border: 'border-amber-200 dark:border-amber-800', bg: 'bg-amber-50/80 dark:bg-amber-900/30', text: 'text-amber-600 dark:text-amber-400', icon: 'text-amber-500 dark:text-amber-400' },
+            cyan: { border: 'border-cyan-200 dark:border-cyan-800', bg: 'bg-cyan-50/80 dark:bg-cyan-900/30', text: 'text-cyan-600 dark:text-cyan-400', icon: 'text-cyan-500 dark:text-cyan-400' },
+            purple: { border: 'border-purple-200 dark:border-purple-800', bg: 'bg-purple-50/80 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400', icon: 'text-purple-500 dark:text-purple-400' },
+            slate: { border: 'border-slate-200 dark:border-slate-700', bg: 'bg-slate-50/80 dark:bg-slate-800/50', text: 'text-slate-600 dark:text-slate-400', icon: 'text-slate-500 dark:text-slate-400' }
         };
         const colors = colorClasses[colorBase];
         const displayVal = value ?? 0;
@@ -71,7 +72,7 @@ export function TaskFlowVisual({
         const pctDiff = benchmarkValue ? ((delta / benchmarkValue) * 100).toFixed(1) : '0';
 
         return (
-            <div className="flex flex-col items-center gap-3 z-10">
+            <div className="flex flex-col items-center gap-3 z-10" >
                 <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center border-2 ${colors.border} shadow-lg ${colors.bg} backdrop-blur-sm transition-transform hover:scale-105 relative group`}>
                     <Icon className={`w-5 h-5 ${colors.icon} mb-1`} />
                     <span className={`text-[10px] font-bold ${colors.text}`}>
@@ -108,11 +109,11 @@ export function TaskFlowVisual({
 
     return (
         <div
-            className={`lg:col-span-5 relative overflow-hidden rounded-3xl border border-white/60 bg-white/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] ${onClick ? 'cursor-pointer transition-all hover:shadow-md hover:border-blue-300' : ''}`}
+            className={`lg:col-span-5 relative overflow-hidden rounded-3xl border border-white/60 dark:border-slate-700/60 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:shadow-none ${onClick ? 'cursor-pointer transition-all hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 dark:hover:bg-slate-800/60' : ''}`}
             onClick={onClick}
         >
             <div className="flex justify-between items-center mb-8">
-                <h3 className="text-lg font-bold text-slate-800">Task Performance Breakdown</h3>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white">Task Performance Breakdown</h3>
                 <div className="flex items-center gap-2">
                     <span className="text-[10px] text-slate-500 italic hidden sm:inline">
                         *Picking GSPT-based split
@@ -149,7 +150,7 @@ export function TaskFlowVisual({
                 <div className="flex justify-between text-sm mb-2">
                     <span className="text-slate-500 font-medium">Average Time per Task</span>
                     <div className="flex flex-col items-end">
-                        <span className="font-bold text-slate-800">{formatTime(total)}</span>
+                        <span className="font-bold text-slate-800 dark:text-white">{formatTime(total)}</span>
                         {hasBenchmark && (
                             <span className="text-[10px] text-slate-400">
                                 vs {formatTime(benchmarkTotal)}

@@ -26,8 +26,8 @@ export function MetricCard({ title, value, subValue, icon, trend, benchmarkValue
         <div
             onClick={onClick}
             className={cn(
-                "relative rounded-3xl border border-white/60 bg-white/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] group transition-all duration-300 hover:z-50",
-                onClick ? "cursor-pointer hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.2)] hover:-translate-y-1 active:scale-[0.98]" : "hover:-translate-y-1",
+                "relative rounded-3xl border border-white/60 dark:border-slate-700/60 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:shadow-none group transition-all duration-300 hover:z-50",
+                onClick ? "cursor-pointer hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.2)] dark:hover:bg-slate-800/60 hover:-translate-y-1 active:scale-[0.98]" : "hover:-translate-y-1",
                 className
             )}
         >
@@ -43,12 +43,12 @@ export function MetricCard({ title, value, subValue, icon, trend, benchmarkValue
                 )}
             </div>
 
-            <h3 className="text-slate-500 text-sm font-medium mb-1">{title}</h3>
+            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1">{title}</h3>
 
             <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-slate-800 tracking-tight">{value}</span>
-                {suffix && <span className="text-sm font-medium text-slate-500 mb-1">{suffix}</span>}
-                {subValue && <span className="text-xs text-slate-400 font-medium ml-1">{subValue}</span>}
+                <span className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">{value}</span>
+                {suffix && <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{suffix}</span>}
+                {subValue && <span className="text-xs text-slate-400 dark:text-slate-500 font-medium ml-1">{subValue}</span>}
             </div>
 
             {trend && (
@@ -64,12 +64,12 @@ export function MetricCard({ title, value, subValue, icon, trend, benchmarkValue
                             {Math.abs(trend.value)}%
                         </div>
                     ) : (
-                        <div className="flex items-center gap-1 text-slate-400">
+                        <div className="flex items-center gap-1 text-slate-400 dark:text-slate-500">
                             <Minus className="w-3 h-3" />
                             0%
                         </div>
                     )}
-                    <span className="text-slate-400">
+                    <span className="text-slate-400 dark:text-slate-500">
                         {benchmarkValue ? `vs ${benchmarkValue}` : 'vs benchmark'}
                     </span>
                 </div>

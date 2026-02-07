@@ -20,12 +20,12 @@ export function AnomaliesView({ telemetry }: AnomaliesViewProps) {
     }, [telemetry, filter, typeFilter]);
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-full">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+        <div className="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col h-full">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+                <h3 className="font-semibold text-slate-800 dark:text-white flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-500" />
                     Anomaly Investigation
-                    <span className="bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded-full">{filtered.length}</span>
+                    <span className="bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs px-2 py-0.5 rounded-full">{filtered.length}</span>
                 </h3>
 
                 <div className="flex gap-2">
@@ -36,13 +36,13 @@ export function AnomaliesView({ telemetry }: AnomaliesViewProps) {
                             placeholder="Filter user or message..."
                             value={filter}
                             onChange={e => setFilter(e.target.value)}
-                            className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none"
+                            className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
                         />
                     </div>
                     <select
                         value={typeFilter}
                         onChange={e => setTypeFilter(e.target.value)}
-                        className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none bg-white"
+                        className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                     >
                         <option value="ALL">All Types</option>
                         <option value="OVERLAP">Overlaps</option>
@@ -57,18 +57,18 @@ export function AnomaliesView({ telemetry }: AnomaliesViewProps) {
                 ) : (
                     <div className="space-y-2">
                         {filtered.map((t, i) => (
-                            <div key={i} className="flex gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
+                            <div key={i} className="flex gap-3 p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                 <div className="mt-1">
                                     <div className="w-2 h-2 rounded-full bg-amber-500"></div>
                                 </div>
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start">
-                                        <span className="text-xs font-bold text-slate-700">{t.user}</span>
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{t.user}</span>
                                         <span className="text-[10px] font-mono text-slate-400">{t.timestamp.toLocaleString()}</span>
                                     </div>
-                                    <p className="text-xs text-slate-600 mt-1">{t.message}</p>
+                                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{t.message}</p>
                                     <div className="mt-2 flex gap-2">
-                                        <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">
+                                        <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                                             {t.type}
                                         </span>
                                     </div>

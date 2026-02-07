@@ -131,13 +131,13 @@ export function JobBreakdownView({ stats }: JobBreakdownViewProps) {
 
     const Th = ({ field, label, align = 'left', width, tooltip }: { field: SortField | 'ai', label: string, align?: 'left' | 'right' | 'center', width?: string, tooltip?: React.ReactNode }) => (
         <th
-            className={`px-4 py-3 bg-white/85 backdrop-blur-xl border-b border-white/50 cursor-pointer hover:bg-white/95 transition-colors group select-none sticky top-0 z-20 ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}`}
+            className={`px-4 py-3 bg-white/85 dark:bg-slate-900/85 backdrop-blur-xl border-b border-white/50 dark:border-slate-700/50 cursor-pointer hover:bg-white/95 dark:hover:bg-slate-800 transition-colors group select-none sticky top-0 z-20 ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}`}
             style={{ width }}
             onClick={() => field !== 'ai' ? handleSort(field as SortField) : handleSort('isAI')}
         >
             <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : ''}`}>
                 <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-xs text-slate-600 uppercase tracking-wider">{label}</span>
+                    <span className="font-semibold text-xs text-slate-600 dark:text-slate-300 uppercase tracking-wider">{label}</span>
                     {tooltip && <RichTooltip content={tooltip} />}
                 </div>
                 <SortIcon field={field === 'ai' ? 'isAI' : field as SortField} />
@@ -151,7 +151,7 @@ export function JobBreakdownView({ stats }: JobBreakdownViewProps) {
             {/* ... */}
 
             {/* Data Grid */}
-            <div className="flex-1 bg-white/40 backdrop-blur-md border border-white/60 rounded-3xl shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] overflow-hidden flex flex-col">
+            <div className="flex-1 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md border border-white/60 dark:border-slate-700/60 rounded-3xl shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:shadow-none overflow-hidden flex flex-col">
                 <div className="overflow-auto flex-1">
                     <table className="w-full text-sm text-left border-collapse">
                         {/* 1. Header Row */}
@@ -167,8 +167,8 @@ export function JobBreakdownView({ stats }: JobBreakdownViewProps) {
                             </tr>
 
                             {/* 2. Filter Row - Manually Sticky below Header */}
-                            <tr className="border-b border-white/40 bg-white/70">
-                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 backdrop-blur-xl border-b border-white/40">
+                            <tr className="border-b border-white/40 dark:border-slate-700/40 bg-white/70 dark:bg-slate-800/70">
+                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl border-b border-white/40 dark:border-slate-700/40">
                                     <div className="relative">
                                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
                                         <input
@@ -176,7 +176,7 @@ export function JobBreakdownView({ stats }: JobBreakdownViewProps) {
                                             placeholder="Search code..."
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="w-full pl-7 pr-2 py-1.5 text-xs text-slate-700 bg-white/50 border border-white/60 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent placeholder:text-slate-400"
+                                            className="w-full pl-7 pr-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 border border-white/60 dark:border-slate-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent placeholder:text-slate-400"
                                         />
                                     </div>
                                 </td>
@@ -191,50 +191,50 @@ export function JobBreakdownView({ stats }: JobBreakdownViewProps) {
                                         ))}
                                     </select>
                                 </td>
-                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 backdrop-blur-xl border-b border-white/40">
+                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl border-b border-white/40 dark:border-slate-700/40">
                                     <select
                                         value={aiFilter}
                                         onChange={(e) => setAiFilter(e.target.value as any)}
-                                        className="w-full py-1.5 px-1 text-xs text-slate-700 bg-white/50 border border-white/60 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-center"
+                                        className="w-full py-1.5 px-1 text-xs text-slate-700 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 border border-white/60 dark:border-slate-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-center"
                                     >
                                         <option value="ALL">All Sources</option>
                                         <option value="AI">AI Only</option>
                                         <option value="MANUAL">Human</option>
                                     </select>
                                 </td>
-                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 backdrop-blur-xl border-b border-white/40">
+                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl border-b border-white/40 dark:border-slate-700/40">
                                     <div className="flex items-center gap-1 justify-end">
                                         <input
                                             type="number"
                                             placeholder="Min"
-                                            className="w-14 py-1.5 px-1 text-xs text-slate-700 bg-white/50 border border-white/60 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-right placeholder:text-slate-400"
+                                            className="w-14 py-1.5 px-1 text-xs text-slate-700 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 border border-white/60 dark:border-slate-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-right placeholder:text-slate-400"
                                             value={minOrders} onChange={(e) => setMinOrders(e.target.value)}
                                         />
                                         <span className="text-slate-400 font-light">-</span>
                                         <input
                                             type="number"
                                             placeholder="Max"
-                                            className="w-14 py-1.5 px-1 text-xs text-slate-700 bg-white/50 border border-white/60 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-right placeholder:text-slate-400"
+                                            className="w-14 py-1.5 px-1 text-xs text-slate-700 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 border border-white/60 dark:border-slate-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-right placeholder:text-slate-400"
                                             value={maxOrders} onChange={(e) => setMaxOrders(e.target.value)}
                                         />
                                     </div>
                                 </td>
-                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 backdrop-blur-xl border-b border-white/40 text-right text-xs text-slate-300 select-none">-</td>
-                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 backdrop-blur-xl border-b border-white/40 text-right text-xs text-slate-300 select-none">-</td>
-                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 backdrop-blur-xl border-b border-white/40 text-right text-xs text-slate-300 select-none">-</td>
+                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl border-b border-white/40 dark:border-slate-700/40 text-right text-xs text-slate-300 select-none">-</td>
+                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl border-b border-white/40 dark:border-slate-700/40 text-right text-xs text-slate-300 select-none">-</td>
+                                <td className="p-2 sticky top-[45px] z-10 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl border-b border-white/40 dark:border-slate-700/40 text-right text-xs text-slate-300 select-none">-</td>
                             </tr>
                         </thead>
 
                         <tbody className="divide-y divide-white/30 bg-transparent">
                             {filteredAndSortedStats.map((stat) => (
-                                <tr key={stat.jobCode} className="hover:bg-white/40 transition-colors group">
-                                    <td className="px-4 py-3 font-medium text-slate-900 font-mono text-xs border-r border-transparent hover:border-white/50">
+                                <tr key={stat.jobCode} className="hover:bg-white/40 dark:hover:bg-slate-700/40 transition-colors group">
+                                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white font-mono text-xs border-r border-transparent hover:border-white/50">
                                         {stat.jobCode}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide border ${stat.jobType.toLowerCase().includes('pick') ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                                            stat.jobType.toLowerCase().includes('pack') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                                                'bg-white/40 text-slate-600 border-white/50'
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide border ${stat.jobType.toLowerCase().includes('pick') ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800' :
+                                            stat.jobType.toLowerCase().includes('pack') ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800' :
+                                                'bg-white/40 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 border-white/50 dark:border-slate-700'
                                             }`}>
                                             {stat.jobType}
                                         </span>
@@ -250,10 +250,10 @@ export function JobBreakdownView({ stats }: JobBreakdownViewProps) {
                                             <span className="text-[10px] text-slate-300 font-medium">MAN</span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 text-right tabular-nums text-slate-600">{stat.totalOrders.toLocaleString()}</td>
-                                    <td className="px-4 py-3 text-right tabular-nums text-slate-600">{stat.totalLocations.toLocaleString()}</td>
-                                    <td className="px-4 py-3 text-right tabular-nums text-slate-600">{stat.totalSkus.toLocaleString()}</td>
-                                    <td className="px-4 py-3 text-right font-medium text-slate-900 tabular-nums bg-white/20">
+                                    <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">{stat.totalOrders.toLocaleString()}</td>
+                                    <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">{stat.totalLocations.toLocaleString()}</td>
+                                    <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">{stat.totalSkus.toLocaleString()}</td>
+                                    <td className="px-4 py-3 text-right font-medium text-slate-900 dark:text-white tabular-nums bg-white/20 dark:bg-slate-700/20">
                                         {stat.totalUnits.toLocaleString()}
                                     </td>
                                 </tr>
