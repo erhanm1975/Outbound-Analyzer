@@ -83,7 +83,7 @@ export function EngineeredStandardsSettings({ cards, onChange }: Props) {
 
                         <div className="p-0">
                             <table className="w-full text-sm">
-                                <thead className="bg-slate-50 dark:bg-slate-900/30 text-xs text-slate-500">
+                                <thead className="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-500 dark:text-slate-400">
                                     <tr>
                                         <th className="px-4 py-2 text-left font-medium">Micro-Activity</th>
                                         <th className="px-4 py-2 text-left font-medium">Bucket (Variable)</th>
@@ -96,7 +96,7 @@ export function EngineeredStandardsSettings({ cards, onChange }: Props) {
                                         <tr key={act.name} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
                                             <td className="px-4 py-2.5">
                                                 <div className="font-medium text-slate-700 dark:text-slate-300">{act.name}</div>
-                                                {act.group && <div className="text-[10px] text-slate-400">{act.group}</div>}
+                                                {act.group && <div className="text-[10px] text-slate-400 dark:text-slate-500">{act.group}</div>}
                                             </td>
                                             <td className="px-4 py-2.5">
                                                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
@@ -110,7 +110,7 @@ export function EngineeredStandardsSettings({ cards, onChange }: Props) {
                                                         min="0"
                                                         value={act.defaultSeconds}
                                                         onChange={(e) => handleActivityChange(cardIndex, actIdx, 'defaultSeconds', parseInt(e.target.value) || 0)}
-                                                        className="w-16 px-2 py-1 text-right text-sm border border-slate-300 dark:border-slate-800 rounded bg-white dark:bg-[#0b0d10] focus:ring-2 focus:ring-slate-500 outline-none text-slate-900 dark:text-slate-100 placeholder-slate-400"
+                                                        className="w-16 px-2 py-1 text-right text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800 focus:ring-2 focus:ring-slate-500 outline-none text-slate-900 dark:text-slate-100 placeholder-slate-400"
                                                     />
                                                     <span className="text-xs text-slate-400 w-4">s</span>
                                                 </div>
@@ -122,7 +122,7 @@ export function EngineeredStandardsSettings({ cards, onChange }: Props) {
                                                         min="0"
                                                         value={act.targetSeconds ?? act.defaultSeconds}
                                                         onChange={(e) => handleActivityChange(cardIndex, actIdx, 'targetSeconds', parseInt(e.target.value) || 0)}
-                                                        className="w-16 px-2 py-1 text-right text-sm border border-blue-200 dark:border-blue-900/50 rounded bg-blue-50/50 dark:bg-blue-900/10 focus:ring-2 focus:ring-blue-500 outline-none text-blue-900 dark:text-blue-100 font-medium placeholder-blue-300"
+                                                        className="w-16 px-2 py-1 text-right text-sm border border-blue-200 dark:border-blue-900/50 rounded bg-blue-50/50 dark:bg-blue-900/20 focus:ring-2 focus:ring-blue-500 outline-none text-blue-900 dark:text-blue-100 font-medium placeholder-blue-300"
                                                     />
                                                     <span className="text-xs text-blue-400 w-4">s</span>
                                                 </div>

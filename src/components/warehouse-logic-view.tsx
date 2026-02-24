@@ -21,6 +21,7 @@ export function WarehouseLogicView({ tasks, activities, config }: WarehouseLogic
             const matchesSearch =
                 searchTerm === '' ||
                 t.JobCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (t.OrderCode && t.OrderCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
                 t.User.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 t.SKU.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 t.TaskType.toLowerCase().includes(searchTerm.toLowerCase());
@@ -143,6 +144,7 @@ export function WarehouseLogicView({ tasks, activities, config }: WarehouseLogic
                                     <th className="px-4 py-3">User</th>
                                     <th className="px-4 py-3">Client</th>
                                     <th className="px-4 py-3">Job Code</th>
+                                    <th className="px-4 py-3">Order ID</th>
                                     <th className="px-4 py-3">Type</th>
                                     <th className="px-4 py-3">SKU</th>
                                     <th className="px-4 py-3">Location</th>
@@ -164,6 +166,7 @@ export function WarehouseLogicView({ tasks, activities, config }: WarehouseLogic
                                             <td className="px-4 py-2 font-medium text-slate-300">{t.User}</td>
                                             <td className="px-4 py-2 text-slate-400">{t.Client || '-'}</td>
                                             <td className="px-4 py-2 font-mono text-slate-400">{t.JobCode}</td>
+                                            <td className="px-4 py-2 font-mono text-blue-300">{t.OrderCode || '-'}</td>
                                             <td className="px-4 py-2">
                                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${t.TaskType === 'Break' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                                                     t.TaskType === 'No Activity' ? 'bg-slate-700/30 text-slate-400 border-slate-600' :

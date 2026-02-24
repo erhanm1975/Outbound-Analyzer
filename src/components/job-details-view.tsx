@@ -16,11 +16,13 @@ export function JobDetailsView({ data, config }: JobDetailsViewProps) {
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUser, setSelectedUser] = useState<string>('ALL');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(50);
 
     // 1. Process Data using Legacy Logic (Standards)
-    const { activities, tasks, stats, users } = useMemo(() => {
+    const { activities, tasksByUser, stats, users } = useMemo(() => {
         // Run the core logic to get standardized objects
-        const { tasks: allTasks, activities: allActivities } = processWarehouseLogic(data);
+        const { tasks: allTasks, activities: allActivities } = processWarehouseLogic(data, {});
 
         // Generate Users List
         const users = Array.from(new Set(allActivities.map(a => a.User))).sort();
@@ -35,26 +37,11 @@ export function JobDetailsView({ data, config }: JobDetailsViewProps) {
             return matchesUser && matchesSearch;
         });
 
-        // Group Tasks by Activity ID (or JobCode + User + Start proximity?)
-        // processWarehouseLogic fills gaps but doesn't explicitly link tasks to Activity ID in the return types yet, 
-        // relying on sorting/time. However, `ActivityObject` has Start/Finish.
-        // Let's filter tasks that fall within the activity windows for the UI.
-
-        // Optimization: Create a Task Map or efficient lookup?
-        // Since both are sorted, we can slice. But for now, simple filter for safety.
-        // Actually, distinct Jobs shouldn't overlap for a single user.
-
-        const tasksByActivity = new Map<string, typeof allTasks>();
-
-        // Map tasks to activities based on Time Window & User
-        // This is necessary because `processWarehouseLogic` separates them.
-        filteredActivities.forEach(act => {
-            const actTasks = allTasks.filter(t =>
-                t.User === act.User &&
-                t.Start >= act.Start &&
-                t.Finish <= act.Finish
-            );
-            tasksByActivity.set(act.id, actTasks);
+        // Optimization: Group tasks by USER (O(N)) instead of per-activity filtering (O(N^2))
+        const tasksByUser = new Map<string, typeof allTasks>();
+        allTasks.forEach(t => {
+            if (!tasksByUser.has(t.User)) tasksByUser.set(t.User, []);
+            tasksByUser.get(t.User)!.push(t);
         });
 
         // Calculate Global Stats from Filtered Activities
@@ -71,12 +58,19 @@ export function JobDetailsView({ data, config }: JobDetailsViewProps) {
 
         return {
             activities: filteredActivities,
-            tasks: tasksByActivity,
+            tasksByUser,
             stats: { totalTime, totalTasks: totalTasksCount, totalProc, totalDirect, totalTravel, totalUnprod },
             users
         };
 
     }, [data, searchTerm, selectedUser]);
+
+    // Helper to get tasks for an activity efficiently
+    const getTasks = (act: any) => {
+        const userTasks = tasksByUser.get(act.User) || [];
+        // Since userTasks are sorted by time, we could optimize further, but filter is fast enough for <1000 items
+        return userTasks.filter((t: any) => t.Start >= act.Start && t.Finish <= act.Finish);
+    };
 
     const toggleExpand = (id: string) => {
         const next = new Set(expandedJobs);
@@ -92,6 +86,18 @@ export function JobDetailsView({ data, config }: JobDetailsViewProps) {
         if (h > 0) return `${h}h ${m}m`;
         return `${m}m`;
     };
+
+    // Pagination Logic
+    const totalPages = Math.ceil(activities.length / itemsPerPage);
+    const paginatedActivities = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return activities.slice(start, start + itemsPerPage);
+    }, [activities, currentPage, itemsPerPage]);
+
+    // Reset page when filters change
+    useMemo(() => {
+        setCurrentPage(1);
+    }, [activities.length]); // Dependencies? activities changes when filters change.
 
     // --- RENDER ---
     return (
@@ -132,13 +138,14 @@ export function JobDetailsView({ data, config }: JobDetailsViewProps) {
                             </div>
                             <div>
                                 <select
-                                    className="bg-transparent text-white font-bold text-lg border-none focus:ring-0 p-0 cursor-pointer hover:text-blue-400 transition-colors"
+                                    className="bg-[#111418] text-white font-bold text-lg border-none focus:ring-0 p-0 cursor-pointer hover:text-blue-400 transition-colors"
+                                    style={{ colorScheme: 'dark' }}
                                     value={selectedUser}
                                     onChange={(e) => setSelectedUser(e.target.value)}
                                 >
-                                    <option value="ALL">All Warehouse Users</option>
+                                    <option value="ALL" className="bg-[#111418] text-white">All Warehouse Users</option>
                                     {users.map(u => (
-                                        <option key={u} value={u}>{u}</option>
+                                        <option key={u} value={u} className="bg-[#111418] text-white">{u}</option>
                                     ))}
                                 </select>
                                 <div className="text-xs text-slate-500 font-mono mt-1">
@@ -256,8 +263,8 @@ export function JobDetailsView({ data, config }: JobDetailsViewProps) {
             </div>
 
             {/* 4. JOB LIST (CARDS) */}
-            <div className="max-w-7xl mx-auto space-y-3">
-                {activities.map(act => {
+            <div className="max-w-7xl mx-auto space-y-3 pb-24">
+                {paginatedActivities.map(act => {
                     const isExpanded = expandedJobs.has(act.id);
                     const getTypeColor = (t: string) => {
                         if (t.includes('pick')) return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
@@ -321,7 +328,7 @@ export function JobDetailsView({ data, config }: JobDetailsViewProps) {
                             </div>
 
                             {/* DETAIL VIEW (EXPANDED) */}
-                            {isExpanded && tasks.has(act.id) && (
+                            {isExpanded && (
                                 <div className="bg-[#0A0C0E] border-t border-slate-800 p-4 animate-in slide-in-from-top-1">
                                     {/* Inner Header */}
                                     <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[9px] uppercase font-bold text-slate-600 border-b border-slate-800 mb-2">
@@ -335,7 +342,7 @@ export function JobDetailsView({ data, config }: JobDetailsViewProps) {
                                         <div className="col-span-1 text-right">Unprod</div>
                                     </div>
                                     <div className="space-y-1">
-                                        {tasks.get(act.id)!.map((t, i) => {
+                                        {getTasks(act).map((t: any, i: number) => {
                                             const isIdle = t.TaskType === 'No Activity';
                                             const isBreak = t.TaskType === 'Break';
                                             const isBatch = t.IsBatchNormalized;
@@ -402,11 +409,53 @@ export function JobDetailsView({ data, config }: JobDetailsViewProps) {
                 })}
             </div>
 
+            {/* Pagination Controls (Fixed Bottom) */}
+            <div className="fixed bottom-0 left-0 right-0 bg-[#0F1115]/95 backdrop-blur-md border-t border-slate-800 p-4 z-50">
+                <div className="max-w-7xl mx-auto flex items-center justify-between">
+                    <div className="text-sm text-slate-500 font-mono">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, activities.length)} of {activities.length} Records
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <select
+                            value={itemsPerPage}
+                            onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                            className="bg-[#1A1D21] border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500"
+                            style={{ colorScheme: 'dark' }}
+                        >
+                            <option value={25} className="bg-[#111418] text-slate-300">25 / page</option>
+                            <option value={50} className="bg-[#111418] text-slate-300">50 / page</option>
+                            <option value={100} className="bg-[#111418] text-slate-300">100 / page</option>
+                        </select>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 bg-[#1A1D21] border border-slate-700 rounded text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Previous
+                            </button>
+                            <span className="text-xs font-mono text-slate-400 px-2">
+                                Page {currentPage} / {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 bg-[#1A1D21] border border-slate-700 rounded text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* 5. SIDE PANEL */}
             {selectedJobId && activities.find(a => a.id === selectedJobId) && (
                 <JobDetailPanel
                     job={activities.find(a => a.id === selectedJobId)!}
-                    tasks={tasks.get(selectedJobId) || []}
+                    tasks={getTasks(activities.find(a => a.id === selectedJobId)!)}
                     onClose={() => setSelectedJobId(null)}
                 />
             )}

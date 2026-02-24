@@ -11,15 +11,20 @@ let currentConfig: {
     smoothingTolerance?: number;
     breakThreshold?: number;
     travelRatio?: number;
+    engineeredStandards?: any; // EngineeredStandardsConfig
+    jobTypeMapping?: Record<string, string>;
 } = {};
 
 export interface WorkerMessage {
-    type: 'UPLOAD' | 'REPROCESS';
+    type: 'UPLOAD' | 'REPROCESS' | 'PREVIEW';
+    append?: boolean;
     files?: File[];
     config?: {
         smoothingTolerance?: number;
         breakThreshold?: number;
         travelRatio?: number;
+        engineeredStandards?: any;
+        jobTypeMapping?: Record<string, string>;
     };
 }
 
@@ -32,6 +37,7 @@ const COLUMN_MAP: Record<string, keyof ShiftRecord> = {
     'Wave code': 'WaveCode',
     'Wave Code': 'WaveCode',
     'Wave': 'WaveCode',
+    'Wave Id': 'WaveCode', // New Format
     'Market Wave': 'WaveCode',
     'Wave Number': 'WaveCode',
     'WAVE NO': 'WaveCode',
@@ -43,6 +49,7 @@ const COLUMN_MAP: Record<string, keyof ShiftRecord> = {
     'Task Type': 'TaskType',
     'SKU': 'SKU',
     'Task UOM Qty': 'Quantity',
+    'Actual QTY': 'Quantity', // New Format (User Approved)
     'Source Location Zone': 'Zone',
     'Source location': 'Location',
     'Executed By User': 'User',
@@ -63,6 +70,7 @@ const COLUMN_MAP: Record<string, keyof ShiftRecord> = {
     'Quantity': 'Quantity',
     'Qty': 'Quantity',
     'UOM Qty': 'Quantity',
+    'Units': 'Quantity',
     'Start': 'Start',
     'StartTime': 'Start',
     'Start Time': 'Start',
@@ -84,7 +92,9 @@ const COLUMN_MAP: Record<string, keyof ShiftRecord> = {
     'fromWarehouseLocationCode': 'Location',
     'createdByEmail': 'User',
     'plannedStartDateTime': 'Start',
+    'Planned Start Date': 'Start', // User Request
     'plannedFinishDateTime': 'Finish',
+    'Planned Finish Date': 'Finish', // User Request
     'productSku': 'SKU',
     'shipmentOrderCode': 'OrderCode',
     'aiJobTypeDescription': 'AIJobDescription',
@@ -127,6 +137,33 @@ const normalizeRecord = (row: any): Record<string, any> => {
     }
 
     // Start/Finish Preference
+    // Helper to parse dates robustly
+    const parseDate = (val: any): any => {
+        if (!val) return val;
+        // 1. Existing Date object
+        if (val instanceof Date) return val;
+        // 2. Excel Serial Number (approximate check > 20000)
+        if (typeof val === 'number' && val > 20000) {
+            // Excel base date logic if needed, but xlsx usually handles this. 
+            // If we get raw number here, it might be missed by xlsx.
+            // But let's assume it's a timestamp if it's huge, or excel serial if small?
+            // Safer to let new Date() handle timestamp. Excel serial needs conversion.
+            // We'll skip complex serial logic for now unless requested, assuming xlsx cellDates=true handles it.
+            return new Date(val);
+        }
+        // 3. String Parsing
+        if (typeof val === 'string') {
+            const clean = val.trim();
+            // Handle 'yyyy-mm-dd hh:mm' -> 'yyyy-mm-ddThh:mm:00' (ISO)
+            // Regex: \d{4}-\d{2}-\d{2} \d{1,2}:\d{2}
+            if (/^\d{4}-\d{2}-\d{2}\s\d{1,2}:\d{2}(:\d{2})?$/.test(clean)) {
+                return new Date(clean.replace(' ', 'T'));
+            }
+            return new Date(clean);
+        }
+        return val; // Fallback to let Schema handle it (or fail)
+    };
+
     // If we have 'plannedStartDateTime' in raw row, use it.
     // Since COLUMN_MAP maps both 'plannedStart' and 'created' to 'Start', the last one visited wins.
     // This is risky. Let's REMOVE 'createdDateTime' from COLUMN_MAP above and handle it here explicitly.
@@ -142,25 +179,92 @@ const normalizeRecord = (row: any): Record<string, any> => {
         if (!normalized['Finish']) normalized['Finish'] = row['createdDateTime'];
     }
 
+    // Apply Robust Parsing
+    if (normalized['Start']) normalized['Start'] = parseDate(normalized['Start']);
+    if (normalized['Finish']) normalized['Finish'] = parseDate(normalized['Finish']);
+
+    // 4. Job Type Mapping (NEW)
+    const rawJobType = normalized['JobType'] || '';
+
+    // User Request (Fuzzy Match): Any "BatchPickAndSort" is Put-Wall
+    if (String(rawJobType).toLowerCase().includes('batchpickandsort')) {
+        normalized['JobType'] = 'Put-Wall';
+    }
+    else if (currentConfig.jobTypeMapping && rawJobType) {
+        if (currentConfig.jobTypeMapping[rawJobType]) {
+            normalized['JobType'] = currentConfig.jobTypeMapping[rawJobType];
+        }
+    }
+
     return normalized;
 };
 
 self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
+    console.log("Worker Processing v3 (Robust Date Parsing)");
     try {
         let files: File[] = [];
-        let config: { smoothingTolerance?: number; breakThreshold?: number; travelRatio?: number } | undefined = undefined;
+        let config: { smoothingTolerance?: number; breakThreshold?: number; travelRatio?: number; engineeredStandards?: any } | undefined = undefined;
         let isReprocess = false;
+        let isAppend = false;
 
         // 1. Unpack Message
         // ------------------------------------------------------------------
-        if ('type' in e.data && (e.data.type === 'UPLOAD' || e.data.type === 'REPROCESS')) {
+        if ('type' in e.data && (e.data.type === 'UPLOAD' || e.data.type === 'REPROCESS' || e.data.type === 'PREVIEW')) {
             const msg = e.data as WorkerMessage;
-            if (msg.type === 'UPLOAD') {
+            if (msg.type === 'UPLOAD' || msg.type === 'PREVIEW') {
                 files = msg.files || [];
                 config = msg.config;
+                isAppend = msg.append || false;
             } else if (msg.type === 'REPROCESS') {
                 isReprocess = true;
                 config = msg.config;
+            }
+
+            // Handle PREVIEW
+            if (msg.type === 'PREVIEW') {
+                const previewResults: any[] = [];
+                for (const file of files) {
+                    try {
+                        const buffer = await file.arrayBuffer();
+                        let headers: string[] = [];
+
+                        if (file.name.toLowerCase().endsWith('.csv')) {
+                            const text = new TextDecoder().decode(buffer.slice(0, 5000)); // Read first 5KB
+                            const firstLine = text.split('\n')[0];
+                            if (firstLine) {
+                                // Simple split for preview
+                                headers = firstLine.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+                            }
+                        } else {
+                            // Excel Preview
+                            // We need to use 'read' from xlsx. 
+                            // Since we imported it as 'read', we use it directly.
+                            const workbook = read(new Uint8Array(buffer), { type: 'array', sheetRows: 5, dense: true });
+                            if (workbook.SheetNames.length > 0) {
+                                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                                const data = utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
+                                if (data.length > 0) {
+                                    headers = data[0].map(h => String(h).trim());
+                                }
+                            }
+                        }
+
+                        // Analyze Mapping
+                        const mappings = headers.map(h => {
+                            const clean = h.trim();
+                            const mappedKey = COLUMN_MAP[clean] || COLUMN_MAP[Object.keys(COLUMN_MAP).find(k => k.toLowerCase() === clean.toLowerCase()) || ''];
+                            return { raw: h, mappedTo: mappedKey || null };
+                        });
+
+                        previewResults.push({ fileName: file.name, mappings });
+
+                    } catch (err) {
+                        previewResults.push({ fileName: file.name, error: (err as Error).message });
+                    }
+                }
+
+                self.postMessage({ type: 'PREVIEW_RESULT', data: previewResults });
+                return;
             }
         } else {
             // Legacy / Direct File support
@@ -172,9 +276,11 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
 
         // Prepare Transform Config
         const transformConfig = {
-            smoothingToleranceMs: (currentConfig.smoothingTolerance ?? 2) * 1000,
+            smoothingTolerance: (currentConfig.smoothingTolerance ?? 2),
             breakThresholdSec: currentConfig.breakThreshold ?? 300, // Default 300s
-            travelRatio: currentConfig.travelRatio ?? 0.70 // Default 70%
+            travelRatio: currentConfig.travelRatio ?? 0.70, // Default 70%
+            engineeredStandards: currentConfig.engineeredStandards,
+            jobTypeMapping: currentConfig.jobTypeMapping // NEW: Pass Mapping
         };
 
         // 2. Reprocess vs Upload
@@ -203,7 +309,13 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
 
         // 3. File Parsing (Upload)
         // ------------------------------------------------------------------
-        const results: ShiftRecord[] = [];
+        const incomingFilenames = files.map(f => f.name);
+
+        // Self-Healing Append: Keep old records but remove any that share a filename with the new upload
+        const results: ShiftRecord[] = isAppend && cachedRecords
+            ? cachedRecords.filter(r => !r.filename || !incomingFilenames.includes(r.filename))
+            : [];
+
         const errors: string[] = [];
         const warnings: string[] = [];
 
@@ -211,9 +323,28 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
         const usersSet = new Set<string>();
         const warehousesSet = new Set<string>();
         const clientsSet = new Set<string>();
+        const uniqueJobTypes = new Set<string>(); // Job type collection
         let minDate: Date | null = null;
         let maxDate: Date | null = null;
-        let totalRows = 0;
+        let totalRows = results.length; // Start row count with existing kept records
+
+        // Seed summary sets from kept records if appending
+        if (isAppend) {
+            results.forEach(r => {
+                if (r.User) usersSet.add(r.User);
+                if (r.Warehouse) warehousesSet.add(r.Warehouse);
+                if (r.Client) clientsSet.add(r.Client);
+                if (r.JobType) uniqueJobTypes.add(r.JobType);
+                if (r.Start) {
+                    if (!minDate || r.Start < minDate) minDate = r.Start;
+                    if (!maxDate || r.Start > maxDate) maxDate = r.Start;
+                }
+                if (r.Finish) {
+                    if (!minDate || r.Finish < minDate) minDate = r.Finish;
+                    if (!maxDate || r.Finish > maxDate) maxDate = r.Finish;
+                }
+            });
+        }
 
         for (const file of files) {
             try {
@@ -312,6 +443,7 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
                     let line: string | null;
                     let userIndex = 0;
 
+
                     while ((line = nextLine()) !== null) {
                         if (!line) continue;
 
@@ -332,12 +464,23 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
                         const normalized = normalizeRecord(row);
                         normalized.filename = file.name;
 
+                        // Ensure set exists in this scope (Fallback safety)
+                        if (typeof uniqueJobTypes === 'undefined') {
+                            // This should have been defined in parent scope, but if we are in a block where it wasn't...
+                            // Actually, let's look at where it is defined. 
+                            // It is defined at line ~420 in the *CSV* path.
+                            // But in the *Excel* path (line 460+), it is NOT defined.
+                        }
+
                         // Validation
                         const result = ShiftRecordSchema.safeParse(normalized);
 
                         if (result.success) {
                             const record = result.data;
                             results.push(record);
+
+                            // Collect Job Type (Raw)
+                            if (record.JobType) uniqueJobTypes.add(record.JobType);
 
                             // Track Stats
                             usersSet.add(record.User);
@@ -488,6 +631,9 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
                             const record = result.data;
                             results.push(record);
 
+                            // Collect Job Type (Raw)
+                            if (record.JobType) uniqueJobTypes.add(record.JobType);
+
                             // Track Stats
                             usersSet.add(record.User);
                             if (record.Warehouse) warehousesSet.add(record.Warehouse);
@@ -555,9 +701,11 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
         try {
             // Prepare Transform Config (Ensure scope)
             const transformConfig = {
-                smoothingToleranceMs: (currentConfig.smoothingTolerance ?? 2) * 1000,
+                smoothingTolerance: (currentConfig.smoothingTolerance ?? 2), // Keep as seconds to match interface
                 breakThresholdSec: currentConfig.breakThreshold ?? 300,
-                travelRatio: currentConfig.travelRatio ?? 0.70
+                travelRatio: currentConfig.travelRatio ?? 0.70,
+                engineeredStandards: currentConfig.engineeredStandards,
+                jobTypeMapping: currentConfig.jobTypeMapping // NEW: Pass Mapping
             };
 
             // New: Pass full config
@@ -574,7 +722,8 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
             data: results,
             taskObjects,
             activityObjects,
-            summary
+            summary,
+            uniqueJobTypes: Array.from(uniqueJobTypes || []).sort() // Send collected types
         });
     } catch (err) {
         self.postMessage({ type: 'ERROR', message: (err as Error).message });

@@ -329,7 +329,10 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
             locationsPerUnit: 0,
             avgTaskDuration: 0,
             avgProcessTimeSec: 0,
-            avgTravelTimeSec: 0
+            avgTravelTimeSec: 0,
+            productiveUPH: 0,
+            floorUPH: 0,
+            outputDensity: 0
         };
 
         // 1. Volume & Tasks

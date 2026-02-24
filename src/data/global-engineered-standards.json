@@ -1,0 +1,1526 @@
+{
+  "jobFlows": [
+    {
+      "acronym": "OBPP",
+      "fullName": "Order Base Pick Pack",
+      "flowClass": "OBPP"
+    },
+    {
+      "acronym": "SIBP",
+      "fullName": "Single Item Batch Pick",
+      "flowClass": "SIBP"
+    },
+    {
+      "acronym": "MICP",
+      "fullName": "Multi Item Cluster Pick",
+      "flowClass": "MICP"
+    },
+    {
+      "acronym": "IOBP",
+      "fullName": "Identical Order Batch Pick",
+      "flowClass": "IOBP"
+    },
+    {
+      "acronym": "SICP",
+      "fullName": "Single Item Cluster Pick",
+      "flowClass": "SICP"
+    },
+    {
+      "acronym": "PUTW",
+      "fullName": "Put Wall Sort",
+      "flowClass": "Put-Wall"
+    },
+    {
+      "acronym": "IIBP",
+      "fullName": "Identical Item Batch Pick",
+      "flowClass": "IIBP"
+    }
+  ],
+  "cards": [
+    {
+      "id": "picking_iobp",
+      "title": "Picking IOBP",
+      "variables": [
+        {
+          "name": "Location Based",
+          "value": 48,
+          "targetValue": 48
+        },
+        {
+          "name": "Location Based",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "SKU Base",
+          "value": 17,
+          "targetValue": 17
+        }
+      ],
+      "activities": [
+        {
+          "name": "Job Initialization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Travel to Location",
+          "defaultSeconds": 45,
+          "targetSeconds": 45,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Location",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Type Quantity",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Pick & Put Item",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 0,
+          "targetSeconds": 0,
+          "bucket": "Line Based"
+        },
+        {
+          "name": "Job Finalization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        }
+      ]
+    },
+    {
+      "id": "packing_iobp",
+      "title": "Packing IOBP",
+      "variables": [
+        {
+          "name": "Job Overhead",
+          "value": 10,
+          "targetValue": 10
+        },
+        {
+          "name": "Order Base",
+          "value": 32,
+          "targetValue": 32
+        },
+        {
+          "name": "Unit Variable",
+          "value": 4,
+          "targetValue": 4
+        }
+      ],
+      "activities": [
+        {
+          "name": "Pack Init",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Box Suggestion",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Rate Shopping",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Print Label First",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Prepare Box",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Put Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Close Box",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Stick Label",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Put Box",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Order Base"
+        }
+      ]
+    },
+    {
+      "id": "picking_putwall",
+      "title": "Picking Duration (Put-Wall)",
+      "variables": [
+        {
+          "name": "Location Based",
+          "value": 13,
+          "targetValue": 13
+        },
+        {
+          "name": "SKU Base",
+          "value": 10,
+          "targetValue": 10
+        },
+        {
+          "name": "Unit Variable",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Job Overhead",
+          "value": 200,
+          "targetValue": 200
+        }
+      ],
+      "activities": [
+        {
+          "name": "Job Initialization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "group": "Picking Init",
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Travel to Location",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Location",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Type Quantity",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Pick & Put Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 0,
+          "targetSeconds": 0,
+          "bucket": "Line Based"
+        },
+        {
+          "name": "Job Finalization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "group": "Picking Init",
+          "bucket": "Job Overhead"
+        }
+      ]
+    },
+    {
+      "id": "sorting_putwall",
+      "title": "Sorting Duration (Put-Wall)",
+      "variables": [
+        {
+          "name": "Unit Variable",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Job Overhead",
+          "value": 130,
+          "targetValue": 130
+        },
+        {
+          "name": "SKU Base",
+          "value": 1,
+          "targetValue": 1
+        },
+        {
+          "name": "Line Based",
+          "value": 2,
+          "targetValue": 2
+        }
+      ],
+      "activities": [
+        {
+          "name": "Job Initialization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "group": "Sorting Init",
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Job Finalization",
+          "defaultSeconds": 30,
+          "targetSeconds": 30,
+          "group": "Sorting Init",
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Line Based"
+        }
+      ]
+    },
+    {
+      "id": "packing_putwall",
+      "title": "Packing Duration (Put-Wall)",
+      "variables": [
+        {
+          "name": "Job Overhead",
+          "value": 10,
+          "targetValue": 10
+        },
+        {
+          "name": "Order Base",
+          "value": 32,
+          "targetValue": 32
+        },
+        {
+          "name": "Unit Variable",
+          "value": 4,
+          "targetValue": 4
+        }
+      ],
+      "activities": [
+        {
+          "name": "Pack Init",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Box Suggestion",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Rate Shopping",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Print Label First",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Prepare Box",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Put Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Close Box",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Stick Label",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Put Box",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Order Base"
+        }
+      ]
+    },
+    {
+      "id": "picking_iibp",
+      "title": "Picking Duration (IIBP)",
+      "variables": [
+        {
+          "name": "Location Based",
+          "value": 43,
+          "targetValue": 43
+        },
+        {
+          "name": "Job Overhead",
+          "value": 200,
+          "targetValue": 200
+        },
+        {
+          "name": "SKU Base",
+          "value": 17,
+          "targetValue": 17
+        }
+      ],
+      "activities": [
+        {
+          "name": "Job Initialization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "group": "Picking Init",
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Travel to Location",
+          "defaultSeconds": 40,
+          "targetSeconds": 40,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Location",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Type Quantity",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Pick & Put Item",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 0,
+          "targetSeconds": 0,
+          "bucket": "Line Based"
+        },
+        {
+          "name": "Job Finalization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "group": "Picking Init",
+          "bucket": "Job Overhead"
+        }
+      ]
+    },
+    {
+      "id": "packing_iibp",
+      "title": "Packing Duration (IIBP)",
+      "variables": [
+        {
+          "name": "Job Overhead",
+          "value": 10,
+          "targetValue": 10
+        },
+        {
+          "name": "Order Base",
+          "value": 32,
+          "targetValue": 32
+        },
+        {
+          "name": "Unit Variable",
+          "value": 4,
+          "targetValue": 4
+        }
+      ],
+      "activities": [
+        {
+          "name": "Pack Init",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Box Suggestion",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Rate Shopping",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Print Label First",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Prepare Box",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Put Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Close Box",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Stick Label",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Put Box",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Order Base"
+        }
+      ]
+    },
+    {
+      "id": "job_init",
+      "title": "Job Initialization (General)",
+      "variables": [
+        {
+          "name": "Picking Init",
+          "value": 250,
+          "targetValue": 250
+        },
+        {
+          "name": "Sorting Init",
+          "value": 100,
+          "targetValue": 100
+        },
+        {
+          "name": "Packing Init (Std)",
+          "value": 20,
+          "targetValue": 20
+        },
+        {
+          "name": "Packing Init (Mass)",
+          "value": 50,
+          "targetValue": 50
+        }
+      ],
+      "activities": [
+        {
+          "name": "Cart Setup",
+          "defaultSeconds": 60,
+          "targetSeconds": 60,
+          "group": "Picking Init",
+          "bucket": "Picking Init"
+        },
+        {
+          "name": "Travel to Zone",
+          "defaultSeconds": 190,
+          "targetSeconds": 190,
+          "group": "Picking Init",
+          "bucket": "Picking Init"
+        }
+      ]
+    },
+    {
+      "id": "picking_duration",
+      "title": "Picking Duration (Standard - Direct Time)",
+      "variables": [
+        {
+          "name": "SKU Base",
+          "value": 18,
+          "targetValue": 18
+        },
+        {
+          "name": "Unit Variable",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Location Based",
+          "value": 3,
+          "targetValue": 3
+        }
+      ],
+      "activities": [
+        {
+          "name": "Scan Location",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Pick & Put Item",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Type Quantity",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "SKU Base"
+        }
+      ]
+    },
+    {
+      "id": "picking_travel",
+      "title": "Picking Travel (Travel Time)",
+      "variables": [
+        {
+          "name": "Travel Proxy",
+          "value": 16,
+          "targetValue": 16
+        }
+      ],
+      "activities": [
+        {
+          "name": "Step Cost",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "bucket": "Travel Proxy"
+        },
+        {
+          "name": "Avg Steps / Line",
+          "defaultSeconds": 15,
+          "targetSeconds": 15,
+          "bucket": "Travel Proxy"
+        }
+      ]
+    },
+    {
+      "id": "packing_duration",
+      "title": "Packing Duration (Standard)",
+      "variables": [
+        {
+          "name": "Box Overhead (Std)",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Box Overhead (Mass)",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Item Handling (Std)",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Item Handling (Mass)",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Order Base",
+          "value": 20,
+          "targetValue": 20
+        },
+        {
+          "name": "Standard Only",
+          "value": 5,
+          "targetValue": 5
+        },
+        {
+          "name": "Unit Variable",
+          "value": 5,
+          "targetValue": 5
+        }
+      ],
+      "activities": [
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "group": "Box Overhead",
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Rate Shopping",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "group": "Box Overhead",
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Print Label",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "group": "Box Overhead",
+          "bucket": "Standard Only"
+        },
+        {
+          "name": "Prepare Box",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "group": "Box Overhead",
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Close Box",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "group": "Box Overhead",
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Stick Label",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "group": "Box Overhead",
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Put Box",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "group": "Box Overhead",
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "group": "Item Handling",
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Put Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "group": "Item Handling",
+          "bucket": "Unit Variable"
+        }
+      ]
+    },
+    {
+      "id": "picking_sibp",
+      "title": "Picking (SIBP)",
+      "variables": [
+        {
+          "name": "Location Based",
+          "value": 13,
+          "targetValue": 13
+        },
+        {
+          "name": "Task Base",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Unit Variable",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Job Overhead",
+          "value": 200,
+          "targetValue": 200
+        },
+        {
+          "name": "SKU Base",
+          "value": 17,
+          "targetValue": 17
+        }
+      ],
+      "activities": [
+        {
+          "name": "Job Initialization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Travel to Location",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Location",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Type Quantity",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Pick & Put Item",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 0,
+          "targetSeconds": 0,
+          "bucket": "Line Based"
+        },
+        {
+          "name": "Job Finalization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        }
+      ]
+    },
+    {
+      "id": "packing_sibp",
+      "title": "Packing (SIBP)",
+      "variables": [
+        {
+          "name": "Job Overhead",
+          "value": 10,
+          "targetValue": 10
+        },
+        {
+          "name": "Order Base",
+          "value": 32,
+          "targetValue": 32
+        },
+        {
+          "name": "Unit Variable",
+          "value": 4,
+          "targetValue": 4
+        }
+      ],
+      "activities": [
+        {
+          "name": "Pack Init",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Box Suggestion",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Rate Shopping",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Print Label First",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Prepare Box",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Put Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Close Box",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Stick Label",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Put Box",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Order Base"
+        }
+      ]
+    },
+    {
+      "id": "picking_sicp",
+      "title": "Picking (SICP)",
+      "variables": [
+        {
+          "name": "Location Based",
+          "value": 48,
+          "targetValue": 48
+        },
+        {
+          "name": "Order Base",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Job Overhead",
+          "value": 250,
+          "targetValue": 250
+        },
+        {
+          "name": "SKU Base",
+          "value": 14,
+          "targetValue": 14
+        },
+        {
+          "name": "Line Based",
+          "value": 3,
+          "targetValue": 3
+        }
+      ],
+      "activities": [
+        {
+          "name": "Job Initialization",
+          "defaultSeconds": 150,
+          "targetSeconds": 150,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Travel to Location",
+          "defaultSeconds": 45,
+          "targetSeconds": 45,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Location",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Type Quantity",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Pick & Put Item",
+          "defaultSeconds": 7,
+          "targetSeconds": 7,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Line Based"
+        },
+        {
+          "name": "Job Finalization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        }
+      ]
+    },
+    {
+      "id": "packing_sicp",
+      "title": "Packing (SICP)",
+      "variables": [
+        {
+          "name": "Job Overhead",
+          "value": 10,
+          "targetValue": 10
+        },
+        {
+          "name": "Order Base",
+          "value": 32,
+          "targetValue": 32
+        },
+        {
+          "name": "Unit Variable",
+          "value": 4,
+          "targetValue": 4
+        }
+      ],
+      "activities": [
+        {
+          "name": "Pack Init",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Box Suggestion",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Rate Shopping",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Print Label First",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Prepare Box",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Put Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Close Box",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Stick Label",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Put Box",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Order Base"
+        }
+      ]
+    },
+    {
+      "id": "picking_micp",
+      "title": "Picking (MICP)",
+      "variables": [
+        {
+          "name": "Location Based",
+          "value": 48,
+          "targetValue": 48
+        },
+        {
+          "name": "Unit Variable",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Order Base",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Job Overhead",
+          "value": 250,
+          "targetValue": 250
+        },
+        {
+          "name": "SKU Base",
+          "value": 14,
+          "targetValue": 14
+        },
+        {
+          "name": "Line Based",
+          "value": 3,
+          "targetValue": 3
+        }
+      ],
+      "activities": [
+        {
+          "name": "Job Initialization",
+          "defaultSeconds": 150,
+          "targetSeconds": 150,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Travel to Location",
+          "defaultSeconds": 45,
+          "targetSeconds": 45,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Location",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Type Quantity",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Pick & Put Item",
+          "defaultSeconds": 7,
+          "targetSeconds": 7,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Line Based"
+        },
+        {
+          "name": "Job Finalization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        }
+      ]
+    },
+    {
+      "id": "packing_micp",
+      "title": "Packing (MICP)",
+      "variables": [
+        {
+          "name": "Job Overhead",
+          "value": 10,
+          "targetValue": 10
+        },
+        {
+          "name": "Order Base",
+          "value": 32,
+          "targetValue": 32
+        },
+        {
+          "name": "Unit Variable",
+          "value": 4,
+          "targetValue": 4
+        }
+      ],
+      "activities": [
+        {
+          "name": "Pack Init",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Box Suggestion",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Rate Shopping",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Print Label First",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Prepare Box",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Put Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Close Box",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Stick Label",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Put Box",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Order Base"
+        }
+      ]
+    },
+    {
+      "id": "picking_obpp",
+      "title": "Picking (OBPP)",
+      "variables": [
+        {
+          "name": "Location Based",
+          "value": 43,
+          "targetValue": 43
+        },
+        {
+          "name": "SKU Base",
+          "value": 18,
+          "targetValue": 18
+        },
+        {
+          "name": "Location Based",
+          "value": 0,
+          "targetValue": 0
+        },
+        {
+          "name": "Job Overhead",
+          "value": 200,
+          "targetValue": 200
+        }
+      ],
+      "activities": [
+        {
+          "name": "Job Initialization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Travel to Location",
+          "defaultSeconds": 40,
+          "targetSeconds": 40,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Location",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Location Based"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Type Quantity",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Pick & Put Item",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "SKU Base"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 0,
+          "targetSeconds": 0,
+          "bucket": "Line Based"
+        },
+        {
+          "name": "Job Finalization",
+          "defaultSeconds": 100,
+          "targetSeconds": 100,
+          "bucket": "Job Overhead"
+        }
+      ]
+    },
+    {
+      "id": "packing_obpp",
+      "title": "Packing (OBPP)",
+      "variables": [
+        {
+          "name": "Job Overhead",
+          "value": 10,
+          "targetValue": 10
+        },
+        {
+          "name": "Order Base",
+          "value": 32,
+          "targetValue": 32
+        },
+        {
+          "name": "Unit Variable",
+          "value": 4,
+          "targetValue": 4
+        }
+      ],
+      "activities": [
+        {
+          "name": "Pack Init",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Box Suggestion",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Rate Shopping",
+          "defaultSeconds": 10,
+          "targetSeconds": 10,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Print Label First",
+          "defaultSeconds": 5,
+          "targetSeconds": 5,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Prepare Box",
+          "defaultSeconds": 1,
+          "targetSeconds": 1,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Put Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Close Box",
+          "defaultSeconds": 4,
+          "targetSeconds": 4,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Stick Label",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Order Base"
+        },
+        {
+          "name": "Put Box",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Order Base"
+        }
+      ]
+    },
+    {
+      "id": "sorting_duration",
+      "title": "Sorting Duration (Standard)",
+      "variables": [
+        {
+          "name": "Unit Variable",
+          "value": 5,
+          "targetValue": 5
+        },
+        {
+          "name": "Job Overhead",
+          "value": 100,
+          "targetValue": 100
+        }
+      ],
+      "activities": [
+        {
+          "name": "Job Initialization",
+          "defaultSeconds": 60,
+          "targetSeconds": 60,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Job Finalization",
+          "defaultSeconds": 40,
+          "targetSeconds": 40,
+          "bucket": "Job Overhead"
+        },
+        {
+          "name": "Scan Item",
+          "defaultSeconds": 2,
+          "targetSeconds": 2,
+          "bucket": "Unit Variable"
+        },
+        {
+          "name": "Scan Tote",
+          "defaultSeconds": 3,
+          "targetSeconds": 3,
+          "bucket": "Unit Variable"
+        }
+      ]
+    }
+  ]
+}

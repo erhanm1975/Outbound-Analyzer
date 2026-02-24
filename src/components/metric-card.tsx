@@ -26,8 +26,8 @@ export function MetricCard({ title, value, subValue, icon, trend, benchmarkValue
         <div
             onClick={onClick}
             className={cn(
-                "relative rounded-3xl border border-white/60 dark:border-slate-700/60 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:shadow-none group transition-all duration-300 hover:z-50",
-                onClick ? "cursor-pointer hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.2)] dark:hover:bg-slate-800/60 hover:-translate-y-1 active:scale-[0.98]" : "hover:-translate-y-1",
+                "relative rounded-3xl border border-white/60 dark:border-slate-800/60 bg-white/40 dark:bg-[#0b0d10]/60 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:shadow-none group transition-all duration-300 hover:z-50",
+                onClick ? "cursor-pointer hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.2)] dark:hover:bg-[#111418]/80 hover:-translate-y-1 active:scale-[0.98]" : "hover:-translate-y-1",
                 className
             )}
         >
@@ -54,12 +54,12 @@ export function MetricCard({ title, value, subValue, icon, trend, benchmarkValue
             {trend && (
                 <div className="flex items-center gap-2 text-xs font-medium mt-3">
                     {trend.value > 0 ? (
-                        <div className={cn("flex items-center gap-1", trend.isPositiveGood ? "text-emerald-600" : "text-rose-600")}>
+                        <div className={cn("flex items-center gap-1", trend.isPositiveGood ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
                             <ArrowUpRight className="w-3 h-3" />
                             {Math.abs(trend.value)}%
                         </div>
                     ) : trend.value < 0 ? (
-                        <div className={cn("flex items-center gap-1", !trend.isPositiveGood ? "text-emerald-600" : "text-rose-600")}>
+                        <div className={cn("flex items-center gap-1", !trend.isPositiveGood ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
                             <ArrowDownRight className="w-3 h-3" />
                             {Math.abs(trend.value)}%
                         </div>

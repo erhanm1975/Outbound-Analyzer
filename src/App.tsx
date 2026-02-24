@@ -26,6 +26,8 @@ import { WorkloadProfilePanel } from './components/workload-profile-panel';
 import { TaskFlowVisual } from './components/charts/TaskFlowVisual';
 import { JobDetailsView } from './components/job-details-view';
 import { WarehouseLogicView } from './components/warehouse-logic-view';
+import { StandardsImpactView } from './components/standards-impact-view';
+import { JobTypeMappingModal } from './components/job-type-mapping-modal';
 import { DashboardSection } from './components/dashboard-section';
 
 import { useFileIngestion } from './hooks';
@@ -37,12 +39,55 @@ import { Activity, Clock, Box, TrendingUp, AlertTriangle, Settings, ClipboardLis
 import { VelocityView } from './components/velocity-view';
 import { UserGuideView } from './components/user-guide-view';
 import { GlobalHeader } from './components/global-header';
+// ... imports
+import { MappingPreviewModal } from './components/mapping-preview-modal';
+import { GOLAAuditRunner } from './components/gola/GOLAAuditRunner';
+
+import { useEngineeredStandards } from './hooks/useEngineeredStandards';
 
 function App() {
-  const { processFiles, reprocessLogic, isProcessing, data, taskObjects, activityObjects, summary, error, progress } = useFileIngestion();
-  const [config, setConfig] = useState<BufferConfig>(DEFAULT_BUFFER_CONFIG);
+  const { processFiles, previewFiles, clearPreview, mappingPreview, reprocessLogic, isProcessing, data, taskObjects, activityObjects, summary, error, progress, lastUniqueJobTypes } = useFileIngestion();
+
+  const {
+    config,
+    updateStandards,
+    restoreGlobalDefaults,
+    pushCustomizedToGlobal,
+    isSaving,
+    saveStatus
+  } = useEngineeredStandards(DEFAULT_BUFFER_CONFIG);
+
   const [showSummary, setShowSummary] = useState(false);
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'health' | 'jobs' | 'dictionary' | 'activity' | 'details' | 'anomalies' | 'data-health' | 'metrics' | 'report' | 'users' | 'flow' | 'forensic' | 'timeline' | 'settings' | 'standards' | 'velocity' | 'guide'>('dashboard');
+  const [showJobMapper, setShowJobMapper] = useState(false); // NEW
+
+  // Trigger Modal when unique types change (file processed)
+  useEffect(() => {
+    if (lastUniqueJobTypes && lastUniqueJobTypes.length > 0) {
+      // Option: Only show if there are unmapped types? 
+      // User asked to "match them". 
+      // We can show it if new file loaded.
+      // Let's check against known mappings to see if we should auto-pop?
+      // Or just always show it for now as a feature step? 
+      // "Show a popup ... to match them".
+      // Let's show it if we have types.
+      if (!config.jobTypeMapping) {
+        setShowJobMapper(true);
+      } else {
+        // If we have mapping, check if any new types are NOT in mapping
+        const hasNew = lastUniqueJobTypes.some(t => !config.jobTypeMapping![t]);
+        if (hasNew) setShowJobMapper(true);
+      }
+    }
+  }, [lastUniqueJobTypes]);
+
+  const handleJobMappingSave = (mapping: Record<string, string>) => {
+    // Update config
+    const newConfig = { ...config, jobTypeMapping: mapping };
+    updateStandards(newConfig);
+    // Reprocess
+    reprocessLogic(newConfig);
+  };
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'health' | 'jobs' | 'dictionary' | 'activity' | 'details' | 'anomalies' | 'data-health' | 'metrics' | 'report' | 'users' | 'flow' | 'forensic' | 'timeline' | 'gola-runner' | 'settings' | 'standards' | 'engineered-impact' | 'velocity' | 'guide'>('dashboard');
 
   // Support View Metric State
   const [detailMetric, setDetailMetric] = useState<string>('Picking UPH (Hourly Average)');
@@ -70,6 +115,31 @@ function App() {
       setBenchmarkFile(filenames[1]);
     }
   }, [filenames, activeFile, benchmarkFile]);
+
+  // Trigger reprocessing when smoothing tolerance changes
+  useEffect(() => {
+    if (data.length > 0 && config.smoothingTolerance !== undefined) {
+      reprocessLogic(config);
+    }
+  }, [config.smoothingTolerance, data.length, reprocessLogic, config]);
+
+  const handleExportContext = () => {
+    if (!primaryAnalysis) return;
+    const report = generateAIContext(
+      primaryAnalysis,
+      primaryFile || 'unknown',
+      summary,
+      secondaryAnalysis,
+      secondaryFile || undefined
+    );
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `context_export_${primaryFile}_${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   /* Removed unused activeShift, clientFilter is active */
   const [clientFilter, setClientFilter] = useState<string>('ALL');
@@ -155,11 +225,11 @@ function App() {
       if (config.isIntraJobBufferAutoCalculated !== false) {
         if (suggestedBuffer > 0 && suggestedBuffer !== config.intraJobBuffer) {
           console.log('✅ Auto-populating intraJobBuffer with:', suggestedBuffer);
-          setConfig(prev => ({
-            ...prev,
+          updateStandards({
+            ...config,
             intraJobBuffer: suggestedBuffer,
             isIntraJobBufferAutoCalculated: true
-          }));
+          });
         } else {
           console.log('⚠️ Skipping auto-populate - value:', suggestedBuffer, 'current:', config.intraJobBuffer);
         }
@@ -172,35 +242,40 @@ function App() {
   const activeStats = primaryAnalysis ? primaryAnalysis.stats['picking'] : null;
   const secondaryActiveStats = secondaryAnalysis ? secondaryAnalysis.stats['picking'] : null;
 
+  // New: Pending Files for Preview
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+  // ... (rest of state)
+
   // View state
   const handleFiles = (files: File[]) => {
-    processFiles(files, config);
+    // Phase 1: Preview
+    setPendingFiles(files);
+    previewFiles(files);
   };
 
-  // Trigger reprocessing when smoothing tolerance changes
-  useEffect(() => {
-    if (data.length > 0 && config.smoothingTolerance !== undefined) {
-      reprocessLogic(config);
+  const handleConfirmImport = () => {
+    if (pendingFiles.length > 0) {
+      processFiles(pendingFiles, config);
+      setPendingFiles([]); // Clear pending
+      // mappingPreview is auto-cleared by hook when process starts
     }
-  }, [config.smoothingTolerance]);
-
-  const handleExportContext = () => {
-    if (!primaryAnalysis) return;
-    const report = generateAIContext(
-      primaryAnalysis,
-      primaryFile || 'unknown',
-      summary,
-      secondaryAnalysis,
-      secondaryFile || undefined
-    );
-    const blob = new Blob([report], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `context_export_${primaryFile}_${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
+
+  const handleCancelImport = () => {
+    clearPreview();
+    setPendingFiles([]);
+  };
+
+  const handleInjectGolaPayload = (file: File) => {
+    setActiveFile(null);
+    setBenchmarkFile(null);
+    // Add append=true so multiple GOLA scenarios can be injected without clearing
+    processFiles([file], config, true);
+    setCurrentTab('forensic');
+  };
+
+  // ... (rest of effects)
 
   return (
     <Layout
@@ -211,6 +286,15 @@ function App() {
         />
       }
     >
+      {/* Modal Logic */}
+      <MappingPreviewModal
+        isOpen={!!mappingPreview}
+        results={mappingPreview}
+        onConfirm={handleConfirmImport}
+        onCancel={handleCancelImport}
+        isProcessing={isProcessing}
+      />
+
       <div className="p-6 space-y-6 w-full h-full flex flex-col relative">
         {/* Background Blobs (Absolute Positioned) */}
         <div className="fixed top-0 left-0 w-96 h-96 bg-blue-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse pointer-events-none"></div>
@@ -533,7 +617,7 @@ function App() {
           )}
 
           {/* SHARED VISUAL EMPTY STATE FOR OTHER TABS */}
-          {currentTab !== 'dashboard' && currentTab !== 'guide' && (!primaryAnalysis || data.length === 0) && (
+          {currentTab !== 'dashboard' && currentTab !== 'guide' && currentTab !== 'standards' && currentTab !== 'settings' && currentTab !== 'gola-runner' && (!primaryAnalysis || data.length === 0) && (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-12 text-slate-500">
               <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
                 <AlertTriangle className="w-8 h-8 text-slate-600" />
@@ -698,49 +782,16 @@ function App() {
                 </div>
               )}
 
-              {currentTab === 'settings' && (
-                <div className="p-8 max-w-4xl mx-auto w-full">
-                  <div className="bg-white dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-xl shadow-sm p-6">
-                    <div className="mb-6 pb-6 border-b border-border-light dark:border-border-dark">
-                      <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <Settings className="w-6 h-6 text-blue-600" />
-                        Global Settings
-                      </h2>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Adjust global shift parameters, job separation buffers, and legacy configurations.
-                      </p>
-                    </div>
-                    <ConfigPanel
-                      config={config}
-                      onChange={setConfig}
-                      suggestedBuffer={suggestedBuffer}
-                      visibleSections={['global', 'legacy']}
-                    />
-                  </div>
+              {currentTab === 'engineered-impact' && (
+                <div className="flex-1 overflow-hidden">
+                  <StandardsImpactView
+                    tasks={taskObjects.filter(t => !primaryFile || t.filename === primaryFile)}
+                    benchmarkTasks={secondaryFile ? taskObjects.filter(t => t.filename === secondaryFile) : []}
+                    config={config.engineeredStandards}
+                  />
                 </div>
               )}
 
-              {currentTab === 'standards' && (
-                <div className="p-8 max-w-4xl mx-auto w-full">
-                  <div className="bg-white dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-xl shadow-sm p-6">
-                    <div className="mb-6 pb-6 border-b border-border-light dark:border-border-dark">
-                      <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <ClipboardList className="w-6 h-6 text-blue-600" />
-                        Engineered Labor Standards
-                      </h2>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Configure job workflow maps, engineered standards, and calculation groups.
-                      </p>
-                    </div>
-                    <ConfigPanel
-                      config={config}
-                      onChange={setConfig}
-                      suggestedBuffer={suggestedBuffer}
-                      visibleSections={['workflow', 'standards']}
-                    />
-                  </div>
-                </div>
-              )}
               {currentTab === 'velocity' && (
                 <div className="flex-1 overflow-y-auto">
                   <VelocityView
@@ -754,15 +805,83 @@ function App() {
             </>
           )}
 
+          {/* SETTINGS & STANDARDS - Always accessible, no data import required */}
+          {currentTab === 'settings' && (
+            <div className="p-8 max-w-4xl mx-auto w-full">
+              <div className="bg-white dark:bg-[#111418] border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-6">
+                <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-800">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Settings className="w-6 h-6 text-blue-600" />
+                    Global Settings
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+                    Adjust global shift parameters, job separation buffers, and legacy configurations.
+                  </p>
+                </div>
+                <ConfigPanel
+                  config={config}
+                  onChange={updateStandards}
+                  suggestedBuffer={suggestedBuffer}
+                  visibleSections={['global', 'legacy']}
+                  onRestoreGlobal={restoreGlobalDefaults}
+                  onPushGlobal={pushCustomizedToGlobal}
+                  isSaving={isSaving}
+                  saveStatus={saveStatus}
+                />
+              </div>
+            </div>
+          )}
+
+          {currentTab === 'standards' && (
+            <div className="p-8 max-w-4xl mx-auto w-full">
+              <div className="bg-white dark:bg-[#111418] border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-6">
+                <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-800">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <ClipboardList className="w-6 h-6 text-blue-600" />
+                    Engineered Labor Standards
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+                    Configure job workflow maps, engineered standards, and calculation groups.
+                  </p>
+                </div>
+                <ConfigPanel
+                  config={config}
+                  onChange={updateStandards}
+                  suggestedBuffer={suggestedBuffer}
+                  visibleSections={['workflow', 'standards']}
+                  onRestoreGlobal={restoreGlobalDefaults}
+                  onPushGlobal={pushCustomizedToGlobal}
+                  isSaving={isSaving}
+                  saveStatus={saveStatus}
+                />
+              </div>
+            </div>
+          )}
+
           {currentTab === 'guide' && (
             <div className="flex-1 overflow-y-auto">
               <UserGuideView />
             </div>
           )}
 
+          {currentTab === 'gola-runner' && (
+            <GOLAAuditRunner onInjectPayload={handleInjectGolaPayload} />
+          )}
+
         </div>
       </div>
-    </Layout >
+
+      {/* Job Type Mapper Modal */}
+      <JobTypeMappingModal
+        isOpen={showJobMapper}
+        onClose={() => setShowJobMapper(false)}
+        uniqueJobTypes={lastUniqueJobTypes || []}
+        config={config.engineeredStandards || DEFAULT_BUFFER_CONFIG.engineeredStandards!}
+        existingMapping={config.jobTypeMapping || {}}
+        onSave={handleJobMappingSave}
+      />
+
+    </Layout>
   );
 }
 

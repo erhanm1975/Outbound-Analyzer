@@ -34,11 +34,17 @@ export function JobFlowSettings({ flows, onChange }: Props) {
                                     <select
                                         value={flow.flowClass}
                                         onChange={(e) => handleFlowChange(idx, e.target.value as FlowClass)}
-                                        className="px-2 py-1 bg-white dark:bg-[#0b0d10] border border-slate-300 dark:border-slate-800 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-slate-100"
+                                        className="w-full px-2 py-1 bg-white dark:bg-[#0b0d10] border border-slate-300 dark:border-slate-800 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-slate-100"
                                     >
                                         <option value="Standard">Standard</option>
                                         <option value="Mass">Mass</option>
                                         <option value="Put-Wall">Put-Wall</option>
+                                        <option value="IIBP">IIBP</option>
+                                        <option value="IOBP">IOBP</option>
+                                        <option value="SIBP">SIBP</option>
+                                        <option value="MICP">MICP</option>
+                                        <option value="SICP">SICP</option>
+                                        <option value="OBPP">OBPP</option>
                                     </select>
                                 </td>
                             </tr>

@@ -1,144 +1,80 @@
-import type { ShiftRecord, TaskObject, ActivityObject } from '../types';
+import type { ShiftRecord, TaskObject, ActivityObject, EngineeredStandardsConfig } from '../types';
 import { differenceInSeconds } from 'date-fns';
 
-// ----------------------------------------------------------------------
-// Constants
-// ----------------------------------------------------------------------
-const CONFIG = {
-    RATIO_TRAVEL: 0.70,
-    RATIO_DIRECT: 0.30,
-    BREAK_THRESHOLD_SEC: 300, // 5 minutes
-    MAX_DURATION_CAP_SEC: 7200, // 2 hours
-};
+export interface Config {
+    smoothingTolerance?: number; // Configurable tolerance
+    breakThreshold?: number;
+    travelRatio?: number;
+    engineeredStandards?: EngineeredStandardsConfig;
+    jobTypeMapping?: Record<string, string>;
+}
 
-// ----------------------------------------------------------------------
-// Helpers
-// ----------------------------------------------------------------------
-
-// Create a unique key for batch identification
 const getBatchKey = (r: ShiftRecord) => {
     return `${r.User}|${r.Start.getTime()}|${r.Finish.getTime()}|${r.Location}`;
 };
 
-const safeDiv = (num: number, den: number) => den === 0 ? 0 : num / den;
+export function processWarehouseLogic(records: ShiftRecord[], config: Config = {}): { tasks: TaskObject[], activities: ActivityObject[] } {
+    let taskObjects: TaskObject[] = [];
 
-// ----------------------------------------------------------------------
-// Core Logic
-// ----------------------------------------------------------------------
+    // 1. Convert to Base TaskObjects & Determine Job Type
+    records.sort((a, b) => a.Start.getTime() - b.Start.getTime());
 
-interface TransformConfig {
-    smoothingToleranceMs: number;
-    breakThresholdSec: number;
-    travelRatio: number;
-}
-
-export function processWarehouseLogic(
-    records: ShiftRecord[],
-    config: TransformConfig = { smoothingToleranceMs: 2000, breakThresholdSec: 300, travelRatio: 0.70 }
-): { tasks: TaskObject[], activities: ActivityObject[] } {
-    if (records.length === 0) return { tasks: [], activities: [] };
-
-    // 1. Sort Records: User ASC, Start ASC
-    const sorted = [...records].sort((a, b) => {
-        if (a.User < b.User) return -1;
-        if (a.User > b.User) return 1;
-        return a.Start.getTime() - b.Start.getTime();
-    });
-
-    // ------------------------------------------------------------------
-    // Phase 1: Task Object Creation (Batch Normalization + Decomposition)
-    // ------------------------------------------------------------------
-
-    const taskObjects: TaskObject[] = [];
-    const batchMap = new Map<string, ShiftRecord[]>();
-
-    // A. Group into batches
-    sorted.forEach(r => {
+    const batchGroups = new Map<string, ShiftRecord[]>();
+    records.forEach(r => {
         const key = getBatchKey(r);
-        if (!batchMap.has(key)) batchMap.set(key, []);
-        batchMap.get(key)!.push(r);
+        if (!batchGroups.has(key)) batchGroups.set(key, []);
+        batchGroups.get(key)!.push(r);
     });
 
-    // B. Process batches
-    batchMap.forEach((batch) => {
+    batchGroups.forEach((batch, key) => {
         const batchSize = batch.length;
 
         batch.forEach(record => {
-            const start = record.Start;
-            const finish = record.Finish;
-
-            // Edge Case: Zero Duration -> 1s
-            let duration = differenceInSeconds(finish, start);
-            if (duration <= 0) duration = 1;
-
-            // Outlier Detection (Flag locally or cap? Spec says "Flag", but for calc we use it)
-            // We will just use it but could cap it if needed. Leaving raw for now.
-
-            // Batch Normalization
+            const rawDur = differenceInSeconds(record.Finish, record.Start);
+            const duration = Math.max(0, rawDur);
             const normalizedDuration = duration / batchSize;
 
-            // Conditional Decomposition
-            const type = (record.TaskType || '').toLowerCase();
-            let unproductiveDuration = 0;
-            let productiveDuration = normalizedDuration;
-            let directTime = 0;
-            let travelTime = 0;
-
-            if (type.includes('pick')) {
-                directTime = normalizedDuration * (1 - config.travelRatio);
-                travelTime = normalizedDuration * config.travelRatio;
-
-            } else if (type.includes('pack') || type.includes('sort')) {
-                directTime = normalizedDuration * 1.0;
-                travelTime = 0;
-            } else if (type.includes('break') || type.includes('delay')) {
-                // Unproductive Tasks
-                productiveDuration = 0;
-                unproductiveDuration = normalizedDuration;
-                directTime = 0;
-                travelTime = 0;
-            } else {
-                // Default fallback (treat as direct?)
-                directTime = normalizedDuration;
-                travelTime = 0;
+            const rawType = (record.TaskType || '').toLowerCase();
+            let isProd = false;
+            if (rawType.includes('pick') || rawType.includes('sort') || rawType.includes('pack') || rawType.includes('put') || rawType.includes('stow') || rawType.includes('load')) {
+                isProd = true;
             }
+
+            const rawJobType = record.JobType || 'Unknown';
+            const mappedJobType = config.jobTypeMapping?.[rawJobType] || rawJobType;
 
             taskObjects.push({
                 User: record.User,
                 Client: record.Client || 'Unknown',
-                SKU: record.SKU,
-                Location: record.Location,
-                Zone: record.Zone || '',
-                Quantity: record.Quantity,
-                JobCode: String(record.JobCode || 'Unassigned').trim(),
+                WaveCode: record.WaveCode || 'N/A',
+                JobCode: record.JobCode || 'Unassigned',
+                JobType: mappedJobType,
                 OrderCode: record.OrderCode || 'Unknown',
                 TaskType: record.TaskType || 'Unknown',
-                Start: start,
-                Finish: finish,
-                ProductiveDurationSec: productiveDuration,
-                TaskDirectTimeSec: directTime,
-                TaskTravelTimeSec: travelTime,
-                UnproductiveDurationSec: unproductiveDuration,
-                TotalUnits: record.Quantity,
+                SKU: record.SKU || '',
+                Quantity: Number(record.Quantity) || 0, // Fallback to 0!
+                Location: record.Location || '',
+                Zone: record.Zone || '',
+                Start: record.Start,
+                Finish: record.Finish,
+                ProductiveDurationSec: isProd ? normalizedDuration : 0,
+                UnproductiveDurationSec: isProd ? 0 : normalizedDuration,
+                TaskDirectTimeSec: 0,
+                TaskTravelTimeSec: 0,
+                TotalUnits: Number(record.Quantity) || 0, // Fallback to 0!
                 IsBatchNormalized: batchSize > 1,
                 OriginalDurationSec: duration,
-                BatchSize: batchSize
+                BatchSize: batchSize,
+                filename: record.filename
             });
         });
     });
 
-    // Re-sort Task Objects for Sequential Processing
     taskObjects.sort((a, b) => {
         if (a.User < b.User) return -1;
         if (a.User > b.User) return 1;
         return a.Start.getTime() - b.Start.getTime();
     });
-
-    // ------------------------------------------------------------------
-    // Phase 1.2: Cluster Smoothing (Batch Pick Distribution)
-    // ------------------------------------------------------------------
-    // Fix for "Zero Duration" subsequent tasks in a batch sequence.
-    // If User, Job, Location, and SKU are identical and sequential, we distribute the total time.
 
     const smoothedTasks: TaskObject[] = [];
     if (taskObjects.length > 0) {
@@ -148,11 +84,9 @@ export function processWarehouseLogic(
             const prev = cluster[cluster.length - 1];
             const curr = taskObjects[i];
 
-            // Check for sequential (Start ~ Finish) OR simultaneous (Start ~ Start) execution
             const timeDiffSeq = Math.abs(curr.Start.getTime() - prev.Finish.getTime());
             const timeDiffConc = Math.abs(curr.Start.getTime() - prev.Start.getTime());
 
-            // Dynamic tolerance
             const smoothingToleranceMs = (config.smoothingTolerance || 2) * 1000;
 
             const isSameBatchSequence =
@@ -160,167 +94,177 @@ export function processWarehouseLogic(
                 curr.JobCode.trim() === prev.JobCode.trim() &&
                 curr.Location.trim() === prev.Location.trim() &&
                 curr.SKU.trim() === prev.SKU.trim() &&
-                (timeDiffSeq < smoothingToleranceMs || timeDiffConc < smoothingToleranceMs); // Dynamic tolerance
+                (timeDiffSeq < smoothingToleranceMs || timeDiffConc < smoothingToleranceMs);
 
             if (isSameBatchSequence) {
                 cluster.push(curr);
             } else {
-                // Process completed cluster
                 if (cluster.length > 1) {
-                    // Calculate totals
                     const totalProd = cluster.reduce((sum, t) => sum + t.ProductiveDurationSec, 0);
-                    const totalDirect = cluster.reduce((sum, t) => sum + t.TaskDirectTimeSec, 0);
-                    const totalTravel = cluster.reduce((sum, t) => sum + t.TaskTravelTimeSec, 0);
                     const totalUnprod = cluster.reduce((sum, t) => sum + t.UnproductiveDurationSec, 0);
 
-                    // Distribute
                     const avgProd = totalProd / cluster.length;
-                    const avgDirect = totalDirect / cluster.length;
-                    const avgTravel = totalTravel / cluster.length;
                     const avgUnprod = totalUnprod / cluster.length;
-
-                    // Determine envelope dates
-                    const minStart = new Date(Math.min(...cluster.map(t => t.Start.getTime())));
-                    const maxFinish = new Date(Math.max(...cluster.map(t => t.Finish.getTime())));
 
                     cluster.forEach(t => {
                         t.ProductiveDurationSec = avgProd;
-                        t.TaskDirectTimeSec = avgDirect;
-                        t.TaskTravelTimeSec = avgTravel;
                         t.UnproductiveDurationSec = avgUnprod;
-                        t.Start = minStart;
-                        t.Finish = maxFinish;
-                        t.IsSimultaneous = true;
-                        // Mark as smoothed? Optional.
+                        smoothedTasks.push(t);
                     });
+                } else {
+                    smoothedTasks.push(cluster[0]);
                 }
-                smoothedTasks.push(...cluster);
                 cluster = [curr];
             }
         }
-        // Push final cluster
         if (cluster.length > 1) {
             const totalProd = cluster.reduce((sum, t) => sum + t.ProductiveDurationSec, 0);
-            const totalDirect = cluster.reduce((sum, t) => sum + t.TaskDirectTimeSec, 0);
-            const totalTravel = cluster.reduce((sum, t) => sum + t.TaskTravelTimeSec, 0);
             const totalUnprod = cluster.reduce((sum, t) => sum + t.UnproductiveDurationSec, 0);
 
             const avgProd = totalProd / cluster.length;
-            const avgDirect = totalDirect / cluster.length;
-            const avgTravel = totalTravel / cluster.length;
             const avgUnprod = totalUnprod / cluster.length;
-
-            // Determine envelope dates
-            const minStart = new Date(Math.min(...cluster.map(t => t.Start.getTime())));
-            const maxFinish = new Date(Math.max(...cluster.map(t => t.Finish.getTime())));
 
             cluster.forEach(t => {
                 t.ProductiveDurationSec = avgProd;
-                t.TaskDirectTimeSec = avgDirect;
-                t.TaskTravelTimeSec = avgTravel;
                 t.UnproductiveDurationSec = avgUnprod;
-                t.Start = minStart;
-                t.Finish = maxFinish;
-                t.IsSimultaneous = true;
+                smoothedTasks.push(t);
             });
+        } else if (cluster.length === 1) {
+            smoothedTasks.push(cluster[0]);
         }
-        smoothedTasks.push(...cluster);
     }
 
-    // Replace original array with smoothed version for next steps
-    // (We re-assign to a new variable locally, but need to pass it to injectGaps)
-    // Since injectGaps takes `userRecs`, we need to make sure we use smoothedTasks downstream.
+    const tasksToProcess = smoothedTasks.length > 0 ? smoothedTasks : taskObjects;
 
-    // Wait, the next step (Phase 1.5) uses `taskObjects` implicitly by grouping `taskObjects` into `rawByUser`.
-    // We should allow mutation or replace the array reference usage.
-    // Let's replace the `taskObjects` content or use `smoothedTasks` for the grouping.
+    let currentJobCode = '';
+    let currentActivity = '';
 
-    // ------------------------------------------------------------------
-    // Phase 1.5: Gap Injection (Task Level Sequence Reconstruction)
-    // ------------------------------------------------------------------
+    // Track flags
+    const visitedLocs = new Set<string>();
+    const visitedLocSkus = new Set<string>();
+    const visitedOrders = new Set<string>();
+    const visitedPackingOrders = new Set<string>();
 
-    const SHIFT_START_HOUR = 8;
-    const SHIFT_START_MIN = 0;
+    const hasExplicitPutwallDownstream = tasksToProcess.some(t => {
+        const type = (t.TaskType || '').toLowerCase();
+        const jt = (t.JobType || '').trim();
+        return jt === 'PUTW' && (type.includes('sort') || type.includes('pack'));
+    });
 
-    const injectGaps = (userRecs: TaskObject[]): TaskObject[] => {
-        if (userRecs.length === 0) return [];
+    tasksToProcess.forEach((task, index) => {
+        const isFirst = index === 0;
 
-        // Sort (already sorted but ensure)
-        userRecs.sort((a, b) => a.Start.getTime() - b.Start.getTime());
+        const isFirstTaskInJob = task.JobCode !== currentJobCode;
+        if (isFirstTaskInJob) {
+            currentJobCode = task.JobCode || '';
+            visitedLocs.clear();
+            visitedLocSkus.clear();
+            // Orders are NOT cleared per job because an individual order can span jobs potentially, 
+            // but for safety we'll track them uniquely for the wave runtime unless we reset them here.
+            // Actuality: JobCode IS OrderCode in OBPP.
+            visitedOrders.clear();
+            visitedPackingOrders.clear();
+        }
 
+        const isNewVisit = !visitedLocs.has(task.Location);
+        if (task.Location) visitedLocs.add(task.Location);
+
+        const isNewSku = !visitedLocSkus.has(`${task.Location}|${task.SKU}`);
+        if (task.Location && task.SKU) visitedLocSkus.add(`${task.Location}|${task.SKU}`);
+
+        const actName = task.TaskType || '';
+        const isFirstInActivity = actName !== currentActivity;
+        if (isFirstInActivity) currentActivity = actName;
+
+        const isFirstTaskInOrder = !visitedOrders.has(task.OrderCode || '');
+        if (task.OrderCode) visitedOrders.add(task.OrderCode);
+
+        const isFirstPackingTaskInOrder = actName.toLowerCase().includes('pack') && !visitedPackingOrders.has(task.OrderCode || '');
+        if (actName.toLowerCase().includes('pack') && task.OrderCode) visitedPackingOrders.add(task.OrderCode);
+
+        // TODO: Line based... just say false for now except if we want it? No, it's just 1 line per task row.
+        const isNewLine = true;
+
+        const b = calculateBenchmarks(
+            task, isFirst, isNewVisit, isFirstInActivity, isFirstTaskInJob, isFirstTaskInOrder,
+            isNewLine, isNewSku, isFirstPackingTaskInOrder, hasExplicitPutwallDownstream, config
+        );
+
+        task.ProductiveDurationStandardSec = b.prodStd;
+        task.ProductiveDurationTargetSec = b.prodTgt;
+
+        task.StandardPickingInitSec = b.pickingInitStd;
+        task.StandardPickingProcessSec = b.pickingProcessStd;
+        task.StandardPickingTravelSec = b.pickingTravelStd;
+
+        task.StandardSortingInitSec = b.sortingInitStd;
+        task.StandardSortingProcessSec = b.sortingProcessStd;
+
+        task.StandardPackingInitSec = b.packingInitStd;
+        task.StandardPackingProcessSec = b.packingProcessStd;
+
+        // Legacy decomposition for unprod
+        const rawType = (task.TaskType || '').toLowerCase();
+        if (rawType.includes('pick')) {
+            task.TaskDirectTimeSec = task.ProductiveDurationSec * (1 - (config.travelRatio || 0.3));
+            task.TaskTravelTimeSec = task.ProductiveDurationSec * (config.travelRatio || 0.3);
+        } else if (rawType.includes('sort') || rawType.includes('pack')) {
+            task.TaskDirectTimeSec = task.ProductiveDurationSec;
+            task.TaskTravelTimeSec = 0;
+        } else {
+            task.TaskDirectTimeSec = task.ProductiveDurationSec;
+            task.TaskTravelTimeSec = 0;
+        }
+    });
+
+    const injectGaps = (userTasks: TaskObject[]): TaskObject[] => {
+        const breakThresholdMs = (config.breakThreshold || 300) * 1000;
         const filled: TaskObject[] = [];
+        let cursor = userTasks.length > 0 ? userTasks[0].Start : new Date();
+        let lastJobCode = 'Unassigned';
 
-        // Use UTC for robustness
-        const dayRef = userRecs[0].Start;
-        const shiftStart = new Date(dayRef);
-        shiftStart.setUTCHours(SHIFT_START_HOUR, SHIFT_START_MIN, 0, 0);
-
-        let cursor = shiftStart;
-        let lastJobCode: string | null = null;
-
-        userRecs.forEach(task => {
-            const gapSec = differenceInSeconds(task.Start, cursor);
-
-            // Insert Gap Task if needed
-            if (gapSec > 0) {
-                const isBreak = gapSec >= CONFIG.BREAK_THRESHOLD_SEC;
-                const type = isBreak ? 'Break' : 'No Activity';
-
-                // Job Attribution Logic
-                // If Gap is strictly between two tasks of the SAME job, it inherits the JobCode (Intra-Job).
-                // Otherwise (Inter-Job or Pre-Shift), it is Unassigned.
-                const isIntraJob = lastJobCode && lastJobCode === task.JobCode;
-                const gapJobCode = isIntraJob ? lastJobCode : 'Unassigned'; // Or ''/null? TaskObject requires string. 'Unassigned' is safer for UI.
-
+        userTasks.forEach(task => {
+            const gapMs = task.Start.getTime() - cursor.getTime();
+            if (gapMs > breakThresholdMs && gapMs < 7200 * 1000) {
                 filled.push({
                     User: task.User,
-                    Client: '',
+                    Client: task.Client,
+                    WaveCode: 'N/A',
+                    JobCode: 'Unassigned',
+                    JobType: 'Break',
+                    OrderCode: 'Unknown',
+                    TaskType: 'Implicit Break/Delay',
                     SKU: '',
+                    Quantity: 0,
                     Location: '',
                     Zone: '',
-                    Quantity: 0,
-                    JobCode: gapJobCode!,
-                    OrderCode: '',
-                    TaskType: type,
-                    Start: cursor,
-                    Finish: task.Start,
-                    ProductiveDurationSec: isBreak ? 0 : gapSec,
-                    UnproductiveDurationSec: isBreak ? gapSec : 0,
+                    Start: new Date(cursor),
+                    Finish: new Date(task.Start),
+                    ProductiveDurationSec: 0,
+                    UnproductiveDurationSec: gapMs / 1000,
+                    ProductiveDurationStandardSec: 0,
+                    ProductiveDurationTargetSec: 0,
                     TaskDirectTimeSec: 0,
                     TaskTravelTimeSec: 0,
                     TotalUnits: 0,
                     IsBatchNormalized: false,
-                    OriginalDurationSec: gapSec,
-                    BatchSize: 1
+                    OriginalDurationSec: gapMs / 1000,
+                    BatchSize: 1,
+                    filename: task.filename
                 });
             }
-
             filled.push(task);
-
-            // Advance cursor
             if (task.Finish > cursor) {
                 cursor = task.Finish;
             }
-            lastJobCode = task.JobCode;
+            lastJobCode = task.JobCode || 'Unassigned';
         });
 
         return filled;
     };
 
-    // ------------------------------------------------------------------
-    // Phase 2: Activity Object Creation (Contiguous Aggregation)
-    // ------------------------------------------------------------------
-
-    const activityObjects: ActivityObject[] = [];
-    const tasksByUser = new Map<string, TaskObject[]>();
-
-    // Refactored: We now group keys based on filled tasks
-    // But Wait! I need to run injectGaps PER USER first.
-
-    // Group raw objects first
+    const activityObjectsArr: ActivityObject[] = [];
     const rawByUser = new Map<string, TaskObject[]>();
-    // Use smoothedTasks instead of taskObjects if available, otherwise fallback (safety)
-    const tasksToProcess = smoothedTasks.length > 0 ? smoothedTasks : taskObjects;
 
     tasksToProcess.forEach(t => {
         if (!rawByUser.has(t.User)) rawByUser.set(t.User, []);
@@ -331,31 +275,18 @@ export function processWarehouseLogic(
 
     rawByUser.forEach((userTasks, user) => {
         const filledTasks = injectGaps(userTasks);
-        allFilledTasks.push(...filledTasks); // Collect for return
+        allFilledTasks.push(...filledTasks);
 
         if (filledTasks.length === 0) return;
 
-        // Group into Activities
-        // Logic: Contiguous tasks with same JobCode form an Activity.
-        // Even "Unassigned" JobCodes merge into an "Unassigned" Activity (e.g. big break block).
+        let currentBlock: any = null;
 
-        let currentBlock: {
-            JobCode: string;
-            Start: Date;
-            Finish: Date;
-            Tasks: TaskObject[];
-        } | null = null;
-
-        const flushBlock = (blk: NonNullable<typeof currentBlock>) => {
-            let prodDur = 0;
-            let unprodDur = 0;
-            let direct = 0;
-            let travel = 0;
-            let units = 0;
+        const flushBlock = (blk: any) => {
+            let prodDur = 0, unprodDur = 0, direct = 0, travel = 0, units = 0;
             const taskTypes = new Set<string>();
             const orderCodes = new Set<string>();
 
-            blk.Tasks.forEach(t => {
+            blk.Tasks.forEach((t: any) => {
                 prodDur += t.ProductiveDurationSec;
                 unprodDur += t.UnproductiveDurationSec;
                 direct += t.TaskDirectTimeSec;
@@ -365,11 +296,11 @@ export function processWarehouseLogic(
                 if (t.OrderCode && t.OrderCode !== 'Unknown' && t.OrderCode !== '') orderCodes.add(t.OrderCode);
             });
 
-            activityObjects.push({
+            activityObjectsArr.push({
                 id: crypto.randomUUID(),
                 User: user,
                 Activity: Array.from(taskTypes).join('|'),
-                JobCode: blk.JobCode === 'Unassigned' ? null : blk.JobCode, // Convert back to null for UI check if needed
+                JobCode: blk.JobCode === 'Unassigned' ? null : blk.JobCode,
                 Start: blk.Start,
                 Finish: blk.Finish,
                 ProductiveDurationSec: prodDur,
@@ -379,31 +310,21 @@ export function processWarehouseLogic(
                 NofOrders: orderCodes.size,
                 NofTasks: blk.Tasks.length,
                 NofUnits: units,
-                AvgTaskDurationSec: safeDiv(prodDur + unprodDur, blk.Tasks.length), // Avg should include total time? Usually just productive. Keeping existing logic.
-                AvgTravelDurationSec: safeDiv(travel, blk.Tasks.length)
+                AvgTaskDurationSec: (prodDur + unprodDur) / blk.Tasks.length,
+                AvgTravelDurationSec: travel / blk.Tasks.length
             });
         };
 
         filledTasks.forEach(task => {
             if (!currentBlock) {
-                currentBlock = {
-                    JobCode: task.JobCode,
-                    Start: task.Start,
-                    Finish: task.Finish,
-                    Tasks: [task]
-                };
+                currentBlock = { JobCode: task.JobCode, Start: task.Start, Finish: task.Finish, Tasks: [task] };
             } else {
                 if (task.JobCode === currentBlock.JobCode) {
                     currentBlock.Tasks.push(task);
                     if (task.Finish > currentBlock.Finish) currentBlock.Finish = task.Finish;
                 } else {
                     flushBlock(currentBlock);
-                    currentBlock = {
-                        JobCode: task.JobCode,
-                        Start: task.Start,
-                        Finish: task.Finish,
-                        Tasks: [task]
-                    };
+                    currentBlock = { JobCode: task.JobCode, Start: task.Start, Finish: task.Finish, Tasks: [task] };
                 }
             }
         });
@@ -411,5 +332,148 @@ export function processWarehouseLogic(
         if (currentBlock) flushBlock(currentBlock);
     });
 
-    return { tasks: allFilledTasks, activities: activityObjects };
+    return { tasks: allFilledTasks, activities: activityObjectsArr };
+}
+
+function calculateBenchmarks(
+    task: TaskObject,
+    isFirst: boolean,
+    isNewVisit: boolean,
+    isFirstInActivity: boolean,
+    isFirstTaskInJob: boolean,
+    isFirstTaskInOrder: boolean,
+    isNewLine: boolean,
+    isNewSku: boolean,
+    isFirstPackingTaskInOrder: boolean,
+    hasExplicitPutwallDownstream: boolean,
+    config: Config
+) {
+    let pickingInitStd = 0, pickingTravelStd = 0, pickingProcessStd = 0;
+    let sortingInitStd = 0, sortingProcessStd = 0;
+    let packingInitStd = 0, packingProcessStd = 0;
+
+    let prodStd = 0, prodTgt = 0;
+
+    const taskType = (task.TaskType || '').toLowerCase();
+    const flowClass = task.JobType || 'Unknown';
+
+    if (taskType.includes('break') || taskType.includes('delay')) {
+        return { pickingInitStd, pickingTravelStd, pickingProcessStd, sortingInitStd, sortingProcessStd, packingInitStd, packingProcessStd, prodStd, prodTgt };
+    }
+
+    const applyMultiplier = (act: any) => {
+        if (act.bucket === 'Job Overhead') return isFirstTaskInJob ? 1 : 0;
+        if (act.bucket === 'Activity Overhead') return isFirstInActivity ? 1 : 0;
+        if (act.bucket === 'Location Based') return isNewVisit ? 1 : 0;
+        if (act.bucket === 'SKU Base') return isNewSku ? 1 : 0;
+        if (act.bucket === 'Line Based') return isNewLine ? 1 : 0;
+        if (act.bucket === 'Order Base') {
+            if (taskType.includes('pack')) return isFirstPackingTaskInOrder ? 1 : 0;
+            return isFirstTaskInOrder ? 1 : 0;
+        }
+        if (act.bucket === 'Unit Variable') return task.Quantity || 0;
+        return task.Quantity || 0;
+    };
+
+    const getVar = (cardId: string, bucket: string) => {
+        if (!config?.engineeredStandards?.cards) return { std: 0, tgt: 0 };
+        const card = config.engineeredStandards.cards.find((c: any) => c.id === cardId);
+        if (!card) return { std: 0, tgt: 0 };
+        const variable = card.variables.find((v: any) => v.bucket === bucket || v.name === bucket);
+        return { std: variable?.value || 0, tgt: variable?.targetValue || 0 };
+    };
+
+    const getActs = (cardId: string) => {
+        if (!config?.engineeredStandards?.cards) return [];
+        const card = config.engineeredStandards.cards.find((c: any) => c.id === cardId);
+        return card?.activities || [];
+    };
+
+    let pickingCardId = 'picking_generic';
+    let sortingCardId = 'sorting_generic';
+    let packingCardId = 'packing_duration';
+
+    if (flowClass === 'PUTW') { pickingCardId = 'picking_putwall'; sortingCardId = 'sorting_putwall'; packingCardId = 'packing_putwall'; }
+    else if (flowClass === 'OBPP') { pickingCardId = 'picking_obpp'; packingCardId = 'packing_obpp'; }
+    else if (flowClass === 'MICP') { pickingCardId = 'picking_micp'; packingCardId = 'packing_micp'; }
+    else if (flowClass === 'SICP') { pickingCardId = 'picking_sicp'; packingCardId = 'packing_sicp'; }
+    else if (flowClass === 'SIBP') { pickingCardId = 'picking_sibp'; packingCardId = 'packing_sibp'; }
+    else if (flowClass === 'IIBP') { pickingCardId = 'picking_iibp'; packingCardId = 'packing_iibp'; }
+    else if (flowClass === 'IOBP') { pickingCardId = 'picking_iobp'; packingCardId = 'packing_iobp'; }
+
+    const evaluateCard = (cId: string, applyFirstJobInit: boolean) => {
+        let initStd = 0, initTgt = 0;
+        let travelStd = 0, travelTgt = 0;
+        let processStd = 0, processTgt = 0;
+
+        const cardActs = getActs(cId);
+        if (!cardActs) return { initStd, initTgt, travelStd, travelTgt, processStd, processTgt };
+
+        cardActs.forEach((act: any) => {
+            const isTravel = act.name.toLowerCase().includes('travel') || act.bucket === 'Travel';
+            const isOverhead = act.bucket === 'Job Overhead';
+            const mult = applyMultiplier(act);
+
+            const stdLocal = act.value !== undefined ? act.value : act.defaultSeconds !== undefined ? act.defaultSeconds : act.std !== undefined ? act.std : 0;
+            const tgtLocal = act.targetValue !== undefined ? act.targetValue : act.targetSeconds !== undefined ? act.targetSeconds : act.tgt !== undefined ? act.tgt : 0;
+
+            const effStd = stdLocal * mult;
+            const effTgt = tgtLocal * mult;
+
+            if (isTravel) {
+                travelStd += effStd; travelTgt += effTgt;
+            } else if (!isOverhead) {
+                processStd += effStd; processTgt += effTgt;
+            }
+        });
+
+        if (applyFirstJobInit && initStd === 0) {
+            initStd = getVar(cId, 'Job Overhead').std;
+            initTgt = getVar(cId, 'Job Overhead').tgt;
+
+            if (initStd === 0) {
+                if (cId === sortingCardId) initStd = getVar('job_init', 'Sorting Init').std;
+                if (cId === pickingCardId) initStd = getVar('job_init', 'Picking Init').std;
+                if (cId === packingCardId && flowClass !== 'OBPP') {
+                    initStd = getVar('job_init', 'Packing Init (Std)').std;
+                }
+                initTgt = initStd;
+            }
+        }
+        return { initStd, initTgt, travelStd, travelTgt, processStd, processTgt };
+    };
+
+    if (taskType.includes('sort')) {
+        const sortRes = evaluateCard(sortingCardId, isFirstInActivity);
+        sortingInitStd = sortRes.initStd;
+        sortingProcessStd = sortRes.processStd;
+        prodStd = sortRes.processStd + sortRes.initStd;
+        prodTgt = sortRes.processTgt + sortRes.initTgt;
+    } else if (taskType.includes('pack')) {
+        const packRes = evaluateCard(packingCardId, isFirstTaskInJob);
+        packingInitStd = packRes.initStd;
+        packingProcessStd = packRes.processStd;
+        prodStd = packRes.processStd + packRes.initStd;
+        prodTgt = packRes.processTgt + packRes.initTgt;
+    } else {
+        const pickRes = evaluateCard(pickingCardId, isFirstTaskInJob);
+        pickingInitStd = pickRes.initStd;
+        pickingTravelStd = pickRes.travelStd;
+        pickingProcessStd = pickRes.processStd;
+
+        if (flowClass === 'PUTW' && !hasExplicitPutwallDownstream) {
+            const sortRes = evaluateCard(sortingCardId, isFirstTaskInJob);
+            sortingInitStd = sortRes.initStd;
+            sortingProcessStd = sortRes.processStd;
+
+            const packRes = evaluateCard(packingCardId, isFirstTaskInJob);
+            packingInitStd = packRes.initStd;
+            packingProcessStd = packRes.processStd;
+        }
+
+        prodStd = pickingProcessStd + pickingTravelStd + pickingInitStd + sortingInitStd + sortingProcessStd + packingInitStd + packingProcessStd;
+        prodTgt = prodStd; // Simplified: target equals standard
+    }
+
+    return { pickingInitStd, pickingTravelStd, pickingProcessStd, sortingInitStd, sortingProcessStd, packingInitStd, packingProcessStd, prodStd, prodTgt };
 }

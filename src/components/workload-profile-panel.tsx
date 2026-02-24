@@ -63,7 +63,7 @@ export function WorkloadProfilePanel({ stats, benchmarkStats, className }: Workl
     ];
 
     return (
-        <div className={cn("bg-white/40 dark:bg-slate-800/40 backdrop-blur-md border border-white/60 dark:border-slate-700/60 rounded-3xl p-6 shadow-sm", className)}>
+        <div className={cn("bg-white/40 dark:bg-[#0b0d10]/60 backdrop-blur-md border border-white/60 dark:border-slate-800/60 rounded-3xl p-6 shadow-sm", className)}>
             <div className="flex items-center gap-2 mb-6">
                 <div className="h-4 w-1 rounded-full bg-teal-500"></div>
                 <h3 className="text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-xs">Workload Profile</h3>
@@ -79,7 +79,9 @@ export function WorkloadProfilePanel({ stats, benchmarkStats, className }: Workl
                     return (
                         <div key={i} className="flex flex-col">
                             <span className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-1 flex items-center gap-1.5">
-                                {m.icon}
+                                <span className="[&>svg]:text-current text-slate-500 dark:text-slate-400">
+                                    {m.icon}
+                                </span>
                                 {m.label}
                                 {m.tooltip && (
                                     <RichTooltip
@@ -94,11 +96,11 @@ export function WorkloadProfilePanel({ stats, benchmarkStats, className }: Workl
 
                                 {m.benchmark && Math.abs(percent) > 0.1 && (
                                     <span className={cn(
-                                        "text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/50 border border-white/40",
-                                        isGood ? "text-emerald-600" : "text-rose-600"
+                                        "text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/50 border border-white/40 dark:bg-white/5 dark:border-white/10",
+                                        isGood ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                                     )}>
                                         {isPositive ? '+' : ''}{percent.toFixed(2)}%
-                                        <span className="text-slate-400 font-normal ml-1">
+                                        <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">
                                             (vs {m.benchmark?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                                         </span>
                                     </span>

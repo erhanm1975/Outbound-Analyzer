@@ -13,7 +13,8 @@ import {
     PieChart,
     Users,
     ClipboardList,
-    Clock
+    Clock,
+    PlayCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { type BufferConfig } from '../types';
@@ -23,13 +24,15 @@ export const NAVIGATION_ITEMS = [
     { id: 'dashboard', label: 'Dashboard', icon: PieChart },
     { id: 'jobs', label: 'Job Analysis', icon: FileText },
     { id: 'dictionary', label: 'Adaptation Insights', icon: BookOpen },
+    { id: 'velocity', label: 'Velocity Dashboard', icon: Activity },
     { id: 'forensic', label: 'Forensic Audit', icon: ShieldAlert },
     { id: 'timeline', label: 'Timeline Audit', icon: Clock },
+    { id: 'gola-runner', label: 'GOLA Audit Runner', icon: PlayCircle },
+    { id: 'standards', label: 'Engineered Standards', icon: ClipboardList },
+    { id: 'engineered-impact', label: 'Happy Path Analysis', icon: ClipboardList },
     { id: 'users', label: 'Employees', icon: Users },
     { id: 'report', label: 'Reports', icon: FileBarChart },
-    { id: 'settings', label: 'Settings', icon: Settings }, // Global Config
-    { id: 'standards', label: 'Engineered Standards', icon: ClipboardList }, // NEW: Standards Screen
-    { id: 'velocity', label: 'Velocity Dashboard', icon: Activity }, // Velocity Screen
+    { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'guide', label: "User's Guide", icon: BookOpen }, // User Guide
     // Secondary / Advanced Tabs
     { id: 'metrics', label: 'Supportive Data', icon: Table },
@@ -70,7 +73,7 @@ export function Sidebar({
                     </div>
 
                     {/* Navigation Links */}
-                    <div className="flex flex-col gap-1 mt-4 w-full overflow-y-auto">
+                    <div className="flex flex-col gap-1 mt-4 w-full flex-1 overflow-y-auto min-h-0 pr-2 pb-4 scrollbar-thin scrollbar-thumb-slate-700">
                         {NAVIGATION_ITEMS.map((item) => {
                             const isActive = currentTab === item.id;
                             return (
@@ -79,7 +82,7 @@ export function Sidebar({
                                     onClick={() => onTabChange(item.id)}
                                     title={item.label}
                                     className={cn(
-                                        "flex items-center justify-center xl:justify-start gap-3 px-3 py-2 rounded-lg transition-colors group",
+                                        "flex items-center justify-center xl:justify-start gap-3 px-3 py-1.5 2xl:py-2 rounded-lg transition-colors group shrink-0",
                                         isActive
                                             ? "bg-blue-900/20 text-blue-400"
                                             : "text-slate-400 hover:bg-slate-800 hover:text-blue-400"

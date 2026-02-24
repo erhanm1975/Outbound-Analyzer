@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod'; //
 
 export const ShiftRecordSchema = z.object({
     Account: z.preprocess((val) => val == null ? undefined : String(val), z.string().optional()),
@@ -15,16 +15,8 @@ export const ShiftRecordSchema = z.object({
     Zone: z.preprocess((val) => val == null ? undefined : String(val), z.string().optional()),
     Location: z.preprocess((val) => String(val), z.string()),
     User: z.preprocess((val) => String(val), z.string()),
-    Start: z.preprocess((val) => {
-        if (val instanceof Date) return val;
-        if (typeof val === 'string' || typeof val === 'number') return new Date(val);
-        return val;
-    }, z.date()),
-    Finish: z.preprocess((val) => {
-        if (val instanceof Date) return val;
-        if (typeof val === 'string' || typeof val === 'number') return new Date(val);
-        return val;
-    }, z.date()),
+    Start: z.any().transform((val) => new Date(val)).refine(d => !isNaN(d.getTime()), { message: "Invalid Start Date" }),
+    Finish: z.any().transform((val) => new Date(val)).refine(d => !isNaN(d.getTime()), { message: "Invalid Finish Date" }),
     IsAI: z.preprocess((val) => {
         if (typeof val === 'boolean') return val;
         if (typeof val === 'string') {
@@ -53,12 +45,14 @@ export interface BufferConfig {
     flowCalculationMethod?: 'interval' | 'user_daily_average'; // default 'interval'
     smoothingTolerance?: number; // default 2 seconds
     breakThreshold?: number; // default 300 seconds
+    breakThresholdSec?: number; // Added for TransformConfig compatibility
     travelRatio?: number; // default 0.70
     utilizationCap?: number; // default 5 (Top 5)
 
     // NEW: Engineered Standards Integration
     globalShiftParams?: GlobalShiftParams;
     engineeredStandards?: EngineeredStandardsConfig;
+    jobTypeMapping?: Record<string, string>; // Raw JobType -> Standard Flow Acronym
 }
 
 export interface JobTimingMetrics {
@@ -86,7 +80,18 @@ export interface JobTimingMetrics {
 // NEW: Engineered Standards Configuration
 // ----------------------------------------------------------------------
 
-export type FlowClass = 'Standard' | 'Mass' | 'Put-Wall';
+export type FlowClass = 'Standard' | 'Mass' | 'Put-Wall' | 'IIBP' | 'IOBP' | 'SIBP' | 'MICP' | 'SICP' | 'OBPP';
+
+export const STANDARD_VARIABLE_TYPES = [
+    'Job Overhead',
+    'Location Based',
+    'Order Base',
+    'Line Based',
+    'SKU Base',
+    'Unit Variable'
+] as const;
+
+export type StandardVariableType = typeof STANDARD_VARIABLE_TYPES[number];
 
 export interface MicroActivity {
     name: string;
@@ -94,6 +99,23 @@ export interface MicroActivity {
     targetSeconds?: number; // New: Target Standard
     group?: string; // e.g. "Picking Init", "Common", "Standad Only"
     bucket: string; // The variable it sums up to, e.g. "Line Base", "Unit Variable"
+}
+
+export interface MappingPreviewResult {
+    fileName: string;
+    mappings: { raw: string, mappedTo: string | null }[];
+    error?: string;
+}
+
+export interface WorkerResult {
+    type: 'SUCCESS' | 'ERROR' | 'PROGRESS' | 'PREVIEW_RESULT'; // Updated
+    data?: ShiftRecord[] | MappingPreviewResult[]; // Updated
+    taskObjects?: TaskObject[];
+    activityObjects?: ActivityObject[];
+    summary?: IngestionSummary;
+    processed?: number;
+    message?: string;
+    uniqueJobTypes?: string[]; // NEW: Distinct job types found in file
 }
 
 export interface CalculationCard {
@@ -132,6 +154,7 @@ export const DEFAULT_BUFFER_CONFIG: BufferConfig = {
     flowCalculationMethod: 'interval',
     smoothingTolerance: 2, // User requested 2s default
     breakThreshold: 300,
+    breakThresholdSec: 300, // Added for TransformConfig compatibility
     travelRatio: 0.70,
     utilizationCap: 5,
 
@@ -142,105 +165,10 @@ export const DEFAULT_BUFFER_CONFIG: BufferConfig = {
         pickingTravelRatio: 0.70,
         pickingDirectRatio: 0.30,
         smoothingToleranceSec: 2
-    },
-
-    // ENGINEERED STANDARDS (Defaults)
-    engineeredStandards: {
-        jobFlows: [
-            { acronym: 'OBPP', fullName: 'Order Base Pick Pack', flowClass: 'Standard' },
-            { acronym: 'SIBP', fullName: 'Single Item Batch Pick', flowClass: 'Standard' },
-            { acronym: 'MICP', fullName: 'Multi Item Cluster Pick', flowClass: 'Standard' },
-            { acronym: 'IIBP', fullName: 'Identical Item Batch Pick', flowClass: 'Mass' },
-            { acronym: 'IOBP', fullName: 'Identical Order Batch Pick', flowClass: 'Mass' },
-            { acronym: 'SICP', fullName: 'Single Item Cluster Pick', flowClass: 'Mass' },
-            { acronym: 'PUTW', fullName: 'Put Wall Sort', flowClass: 'Put-Wall' }
-        ],
-        cards: [
-            {
-                id: 'job_init',
-                title: 'Job Initialization (Inter-Job)',
-                variables: [
-                    { name: 'Picking Init', value: 250, targetValue: 250 },
-                    { name: 'Sorting Init', value: 100, targetValue: 100 },
-                    { name: 'Packing Init (Std)', value: 20, targetValue: 20 },
-                    { name: 'Packing Init (Mass)', value: 50, targetValue: 50 }
-                ],
-                activities: [
-                    { name: 'Cart Setup', defaultSeconds: 60, targetSeconds: 60, group: 'Picking Init', bucket: 'Picking Init' },
-                    { name: 'Travel to Zone', defaultSeconds: 190, targetSeconds: 190, group: 'Picking Init', bucket: 'Picking Init' },
-                    { name: 'Wall Setup/Login', defaultSeconds: 100, targetSeconds: 100, group: 'Sorting Init', bucket: 'Sorting Init' },
-                    { name: 'Station Login', defaultSeconds: 15, targetSeconds: 15, group: 'Packing Init', bucket: 'Common Init' },
-                    { name: 'Station Prep', defaultSeconds: 5, targetSeconds: 5, group: 'Packing Init', bucket: 'Common Init' },
-                    { name: 'Batch Print', defaultSeconds: 30, targetSeconds: 30, group: 'Packing Init', bucket: 'Mass Flow Only' }
-                ]
-            },
-            {
-                id: 'picking_duration',
-                title: 'Picking Duration (Direct Time)',
-                variables: [
-                    { name: 'Line Base', value: 8, targetValue: 8 },
-                    { name: 'Unit Variable', value: 15, targetValue: 15 }
-                ],
-                activities: [
-                    { name: 'Scan Location', defaultSeconds: 3, targetSeconds: 3, bucket: 'Line Base' },
-                    { name: 'Scan Item', defaultSeconds: 3, targetSeconds: 3, bucket: 'Line Base' },
-                    { name: 'Scan Tote', defaultSeconds: 2, targetSeconds: 2, bucket: 'Line Base' },
-                    { name: 'Pick & Put Item', defaultSeconds: 10, targetSeconds: 10, bucket: 'Unit Variable' },
-                    { name: 'Type Quantity', defaultSeconds: 5, targetSeconds: 5, bucket: 'Unit Variable' }
-                ]
-            },
-            {
-                id: 'picking_travel',
-                title: 'Picking Travel (Travel Time)',
-                variables: [
-                    { name: 'Travel Proxy', value: 16, targetValue: 16 } // 1 + 15
-                ],
-                activities: [
-                    { name: 'Step Cost', defaultSeconds: 1, targetSeconds: 1, bucket: 'Travel Proxy' },
-                    { name: 'Avg Steps / Line', defaultSeconds: 15, targetSeconds: 15, bucket: 'Travel Proxy' }
-                ]
-            },
-            {
-                id: 'packing_duration',
-                title: 'Packing Duration (Process Time)',
-                variables: [
-                    { name: 'Box Overhead (Std)', value: 25, targetValue: 25 },
-                    { name: 'Box Overhead (Mass)', value: 10, targetValue: 10 },
-                    { name: 'Item Handling (Std)', value: 15, targetValue: 15 },
-                    { name: 'Item Handling (Mass)', value: 5, targetValue: 5 }
-                ],
-                activities: [
-                    { name: 'Box Suggestion', defaultSeconds: 5, targetSeconds: 5, group: 'Box Overhead', bucket: 'Standard Only' },
-                    { name: 'Rate Shopping', defaultSeconds: 5, targetSeconds: 5, group: 'Box Overhead', bucket: 'Standard Only' },
-                    { name: 'Print Label', defaultSeconds: 5, targetSeconds: 5, group: 'Box Overhead', bucket: 'Standard Only' },
-                    { name: 'Prepare Box', defaultSeconds: 1, targetSeconds: 1, group: 'Box Overhead', bucket: 'Common' },
-                    { name: 'Close Box', defaultSeconds: 4, targetSeconds: 4, group: 'Box Overhead', bucket: 'Common' },
-                    { name: 'Stick Label', defaultSeconds: 2, targetSeconds: 2, group: 'Box Overhead', bucket: 'Common' },
-                    { name: 'Put Box', defaultSeconds: 3, targetSeconds: 3, group: 'Box Overhead', bucket: 'Common' },
-                    { name: 'Scan Tote', defaultSeconds: 5, targetSeconds: 5, group: 'Item Handling', bucket: 'Standard Only' },
-                    { name: 'Find Item', defaultSeconds: 5, targetSeconds: 5, group: 'Item Handling', bucket: 'Standard Only' },
-                    { name: 'Scan Item', defaultSeconds: 3, targetSeconds: 3, group: 'Item Handling', bucket: 'Common' },
-                    { name: 'Put Item', defaultSeconds: 2, targetSeconds: 2, group: 'Item Handling', bucket: 'Common' }
-                ]
-            },
-            {
-                id: 'sorting_duration',
-                title: 'Sorting Duration (Put-Wall)',
-                variables: [
-                    { name: 'Unit Variable', value: 8, targetValue: 8 }
-                ],
-                activities: [
-                    { name: 'Scan Item', defaultSeconds: 3, targetSeconds: 3, bucket: 'Unit Variable' },
-                    { name: 'Put to Wall', defaultSeconds: 5, targetSeconds: 5, bucket: 'Unit Variable' }
-                ]
-            }
-        ]
     }
 };
 
 export const DEFAULT_CONFIG = DEFAULT_BUFFER_CONFIG;
-
-
 
 export interface EnrichedShiftRecord extends ShiftRecord {
     rawGap: number; // minutes
@@ -411,14 +339,7 @@ export interface IngestionSummary {
     assumptions: string[]; // Logic assumptions log
 }
 
-export interface WorkerResult {
-    type: 'SUCCESS' | 'ERROR';
-    data?: EnrichedShiftRecord[]; // We might parse simply ShiftRecord first
-    taskObjects?: TaskObject[]; // NEW
-    activityObjects?: ActivityObject[]; // NEW
-    summary?: IngestionSummary;
-    message?: string;
-}
+
 
 // ----------------------------------------------------------------------
 // NEW: Warehouse Productivity Logic Types
@@ -432,6 +353,8 @@ export interface TaskObject {
     Zone: string;
     Quantity: number;
     JobCode: string;
+    JobType?: string; // NEW: Mapped Job Type
+    WaveCode?: string; // NEW: For Wave counting
     OrderCode: string; // NEW: For unique order counting
     TaskType: string;
     Start: Date;
@@ -444,11 +367,37 @@ export interface TaskObject {
     UnproductiveDurationSec: number;
     TotalUnits: number;
 
+    // Benchmarking
+    filename?: string;
+
+    // Benchmarks (New)
+    ProductiveDurationStandardSec?: number;
+    ProductiveDurationTargetSec?: number;
+    TaskDirectTimeStandardSec?: number;
+    TaskDirectTimeTargetSec?: number;
+    TaskTravelTimeStandardSec?: number;
+    TaskTravelTimeTargetSec?: number;
+    UnproductiveDurationStandardSec?: number;
+    UnproductiveDurationTargetSec?: number;
+    OriginalDurationStandardSec?: number;
+    OriginalDurationTargetSec?: number;
+
     // Process Metadata
     IsBatchNormalized: boolean;
     OriginalDurationSec: number;
     BatchSize: number;
     IsSimultaneous?: boolean;
+
+    // Granular Standards (New for Happy Path View)
+    StandardPickingInitSec?: number;
+    StandardPickingProcessSec?: number; // Direct Time
+    StandardPickingTravelSec?: number; // Travel Time
+
+    StandardSortingInitSec?: number;
+    StandardSortingProcessSec?: number; // Process Time
+
+    StandardPackingInitSec?: number;
+    StandardPackingProcessSec?: number; // Process Time
 }
 
 export interface ActivityObject {
@@ -469,8 +418,31 @@ export interface ActivityObject {
     NofTasks: number;
     NofUnits: number;
 
+    // Benchmarks (New)
+    ProductiveDurationStandardSec?: number;
+    ProductiveDurationTargetSec?: number;
+    TaskDirectTimeStandardSec?: number;
+    TaskDirectTimeTargetSec?: number;
+    TaskTravelTimeStandardSec?: number;
+    TaskTravelTimeTargetSec?: number;
+    UnproductiveDurationStandardSec?: number;
+    UnproductiveDurationTargetSec?: number;
+    AvgTaskDurationStandardSec?: number;
+    AvgTaskDurationTargetSec?: number;
+    AvgTravelDurationStandardSec?: number;
+    AvgTravelDurationTargetSec?: number;
+
     AvgTaskDurationSec: number;
     AvgTravelDurationSec: number;
+
+    // Granular Standards (Aggregated)
+    PickingInit?: number;
+    PickingProcess?: number;
+    PickingTravel?: number;
+    SortingInit?: number;
+    SortingProcess?: number;
+    PackingInit?: number;
+    PackingProcess?: number;
 }
 
 // ----------------------------------------------------------------------

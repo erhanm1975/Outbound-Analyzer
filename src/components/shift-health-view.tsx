@@ -19,21 +19,21 @@ function StatCard({ label, value, icon: Icon, colorClass, shadowClass, tooltip }
     tooltip?: React.ReactNode;
 }) {
     return (
-        <div className="relative overflow-hidden rounded-3xl border border-white/60 dark:border-slate-700/60 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:shadow-none group hover:-translate-y-1 transition-transform duration-300">
+        <div className="relative overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-800/40 backdrop-blur-md p-6 shadow-none group hover:-translate-y-1 transition-transform duration-300">
             <div className="flex justify-between items-start mb-4">
                 <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white ${shadowClass}`}>
                     <Icon className="h-6 w-6" />
                 </div>
                 {tooltip && (
-                    <div className="bg-white/50 p-1.5 rounded-full cursor-help hover:bg-white transition-colors">
+                    <div className="bg-slate-800/50 p-1.5 rounded-full cursor-help hover:bg-slate-800 transition-colors">
                         <RichTooltip content={tooltip}>
-                            <Info className="w-4 h-4 text-slate-400 hover:text-slate-600" />
+                            <Info className="w-4 h-4 text-slate-400 hover:text-slate-200" />
                         </RichTooltip>
                     </div>
                 )}
             </div>
-            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">{label}</h3>
-            <p className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{value}</p>
+            <h3 className="text-slate-400 text-sm font-medium">{label}</h3>
+            <p className="text-3xl font-bold text-slate-100 mt-1">{value}</p>
         </div>
     );
 }
@@ -54,12 +54,12 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
     }));
 
     return (
-        <div className="relative min-h-screen p-4 lg:p-8 font-sans text-slate-700 w-full animate-in fade-in duration-700">
+        <div className="relative min-h-screen p-4 lg:p-8 font-sans text-slate-300 w-full animate-in fade-in duration-700">
 
             {/* Background Blobs (Absolute Positioned) */}
-            <div className="fixed top-0 left-0 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-[80px] opacity-60 -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse"></div>
-            <div className="fixed top-1/2 right-0 w-[30rem] h-[30rem] bg-purple-300 rounded-full mix-blend-multiply filter blur-[80px] opacity-60 translate-x-1/4 -translate-y-1/2 -z-10"></div>
-            <div className="fixed bottom-0 left-1/3 w-80 h-80 bg-cyan-200 rounded-full mix-blend-multiply filter blur-[80px] opacity-60 translate-y-1/3 -z-10"></div>
+            <div className="fixed top-0 left-0 w-96 h-96 bg-blue-900/30 rounded-full mix-blend-multiply filter blur-[80px] opacity-20 -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse"></div>
+            <div className="fixed top-1/2 right-0 w-[30rem] h-[30rem] bg-purple-900/30 rounded-full mix-blend-multiply filter blur-[80px] opacity-20 translate-x-1/4 -translate-y-1/2 -z-10"></div>
+            <div className="fixed bottom-0 left-1/3 w-80 h-80 bg-cyan-900/20 rounded-full mix-blend-multiply filter blur-[80px] opacity-20 translate-y-1/3 -z-10"></div>
 
             {/* Header Section Removed (Now Global) */}
 

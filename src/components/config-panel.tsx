@@ -3,16 +3,21 @@ import { type BufferConfig, DEFAULT_BUFFER_CONFIG } from '../types';
 import { AlertTriangle, RefreshCw, Calculator, ChevronDown, ChevronRight, Settings, Layout, ClipboardList } from 'lucide-react';
 import { GlobalShiftSettings } from './settings/GlobalShiftSettings';
 import { JobFlowSettings } from './settings/JobFlowSettings';
-import { EngineeredStandardsSettings } from './settings/EngineeredStandardsSettings';
+import { JobStandardsTabs } from './settings/JobStandardsTabs';
+import { BookOpen, FileText, Layers, Box, Grid, List } from 'lucide-react';
 
 interface ConfigPanelProps {
     config: BufferConfig;
     onChange: (newConfig: BufferConfig) => void;
     suggestedBuffer?: number;
     visibleSections?: ('global' | 'workflow' | 'standards' | 'legacy')[];
+    onRestoreGlobal?: () => Promise<void>;
+    onPushGlobal?: () => Promise<void>;
+    isSaving?: boolean;
+    saveStatus?: 'idle' | 'saving' | 'success' | 'error';
 }
 
-export function ConfigPanel({ config, onChange, suggestedBuffer, visibleSections }: ConfigPanelProps) {
+export function ConfigPanel({ config, onChange, suggestedBuffer, visibleSections, onRestoreGlobal, onPushGlobal, isSaving, saveStatus }: ConfigPanelProps) {
     const [localConfig, setLocalConfig] = useState<BufferConfig>(config);
     const [isDirty, setIsDirty] = useState(false);
 
@@ -20,7 +25,7 @@ export function ConfigPanel({ config, onChange, suggestedBuffer, visibleSections
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({
         global: !visibleSections || visibleSections.includes('global'),
         workflow: !visibleSections || visibleSections.includes('workflow'),
-        standards: !visibleSections || visibleSections.includes('standards'),
+        jobStandards: !visibleSections || visibleSections.includes('standards'),
         legacy: !visibleSections || visibleSections.includes('legacy')
     });
 
@@ -31,7 +36,7 @@ export function ConfigPanel({ config, onChange, suggestedBuffer, visibleSections
         }));
     };
 
-    // Ensure defaults are populated if missing (for legacy configs)
+    // Ensure defaults are populated
     useEffect(() => {
         let needsUpdate = false;
         let updatedConfig = { ...config };
@@ -162,22 +167,59 @@ export function ConfigPanel({ config, onChange, suggestedBuffer, visibleSections
                 </div>
             )}
 
-            {/* Section C: Engineered Standards */}
+            {/* Section C: Job Process Standards (Tabbed) - Formerly Section D */}
             {(!visibleSections || visibleSections.includes('standards')) && (
-                <div className="space-y-2">
-                    <SectionHeader id="standards" title="C. Engineered Standards (Calculation Groups)" icon={ClipboardList} />
-                    {openSections['standards'] && localConfig.engineeredStandards && (
-                        <div className="animate-in slide-in-from-top-2 duration-200">
-                            <EngineeredStandardsSettings
-                                cards={localConfig.engineeredStandards.cards}
-                                onChange={handleStandardsChange}
+                <div className="space-y-4">
+                    <SectionHeader id="jobStandards" title="C. Job Process Standards (Breakdowns)" icon={BookOpen} />
+                    {openSections['jobStandards'] && (
+                        <div className="animate-in slide-in-from-top-2 duration-200 space-y-4">
+                            {/* Sync Controls */}
+                            {(onRestoreGlobal || onPushGlobal) && (
+                                <div className="p-4 bg-slate-50 dark:bg-[#0b0d10] border border-slate-200 dark:border-slate-800 rounded-lg flex flex-wrap items-center justify-between gap-4">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">Server Synchronization</span>
+                                        <span className="text-xs text-slate-500 dark:text-slate-400">Manage how your custom standards sync with the global baseline.</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        {onRestoreGlobal && (
+                                            <button
+                                                onClick={onRestoreGlobal}
+                                                disabled={isSaving}
+                                                className="px-3 py-2 bg-white dark:bg-[#111418] border border-slate-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:border-rose-900/50 hover:text-rose-600 dark:hover:text-rose-400 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                                            >
+                                                Restore Baseline
+                                            </button>
+                                        )}
+                                        {onPushGlobal && (
+                                            <button
+                                                onClick={onPushGlobal}
+                                                disabled={isSaving}
+                                                className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                                            >
+                                                Push to Global Baseline
+                                            </button>
+                                        )}
+                                    </div>
+                                    {saveStatus && saveStatus !== 'idle' && (
+                                        <div className="w-full text-right mt-1">
+                                            {saveStatus === 'saving' && <span className="text-xs text-slate-500 animate-pulse">Syncing...</span>}
+                                            {saveStatus === 'success' && <span className="text-xs text-emerald-600 dark:text-emerald-400">Sync Complete.</span>}
+                                            {saveStatus === 'error' && <span className="text-xs text-rose-600 dark:text-rose-400">Sync Failed.</span>}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <JobStandardsTabs
+                                config={localConfig.engineeredStandards}
+                                onStandardsChange={handleStandardsChange}
                             />
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Legacy / Advanced Config */}
+            {/* Legacy / Advanced Config (Renamed to D?) No, keep it separate or rename to D if preferred. Let's keep it as "Advanced" but section letter D is available. */}
             {(!visibleSections || visibleSections.includes('legacy')) && (
                 <div className="space-y-2">
                     <SectionHeader id="legacy" title="Advanced / Legacy Config" icon={AlertTriangle} />
@@ -299,17 +341,31 @@ export function ConfigPanel({ config, onChange, suggestedBuffer, visibleSections
 
             {/* Footer / Apply */}
             <div className="sticky bottom-0 bg-white dark:bg-[#111418] p-4 border-t border-slate-200 dark:border-slate-800 -mx-4 -mb-4 mt-6">
-                <button
-                    onClick={handleApply}
-                    disabled={!isDirty}
-                    className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${isDirty
-                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg transform hover:-translate-y-0.5'
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500'
-                        }`}
-                >
-                    <RefreshCw className={`w-4 h-4 ${isDirty ? 'animate-spin-once' : ''}`} />
-                    {isDirty ? 'Save Configuration & Recalculate' : 'Settings Up to Date'}
-                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={() => {
+                            if (window.confirm("Restore all system default standards? Custom times will be lost.")) {
+                                setLocalConfig(DEFAULT_BUFFER_CONFIG);
+                                onChange(DEFAULT_BUFFER_CONFIG);
+                                setIsDirty(false);
+                            }
+                        }}
+                        className="px-4 py-3 text-sm font-medium text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors border border-rose-200 dark:border-rose-900/50"
+                    >
+                        Restore Defaults
+                    </button>
+                    <button
+                        onClick={handleApply}
+                        disabled={!isDirty}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-all ${isDirty
+                            ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg transform hover:-translate-y-0.5'
+                            : 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500'
+                            }`}
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isDirty ? 'animate-spin-once' : ''}`} />
+                        {isDirty ? 'Save Configuration & Recalculate' : 'Settings Up to Date'}
+                    </button>
+                </div>
             </div>
         </div>
     );

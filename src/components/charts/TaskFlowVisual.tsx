@@ -109,7 +109,7 @@ export function TaskFlowVisual({
 
     return (
         <div
-            className={`lg:col-span-5 relative overflow-hidden rounded-3xl border border-white/60 dark:border-slate-700/60 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:shadow-none ${onClick ? 'cursor-pointer transition-all hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 dark:hover:bg-slate-800/60' : ''}`}
+            className={`lg:col-span-5 relative overflow-hidden rounded-3xl border border-white/60 dark:border-slate-800/60 bg-white/40 dark:bg-[#0b0d10]/60 backdrop-blur-md p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] dark:shadow-none ${onClick ? 'cursor-pointer transition-all hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700/50 dark:hover:bg-[#111418]/80' : ''}`}
             onClick={onClick}
         >
             <div className="flex justify-between items-center mb-8">
@@ -129,14 +129,14 @@ export function TaskFlowVisual({
                             Forensics
                         </button>
                     )}
-                    <span className="text-xs bg-slate-200 px-2 py-1 rounded text-slate-600 font-medium">Avg per Task</span>
+                    <span className="text-xs bg-slate-200 dark:bg-slate-700/50 px-2 py-1 rounded text-slate-600 dark:text-slate-300 font-medium">Avg per Task</span>
                 </div>
             </div>
 
             {/* Connected Cards Row */}
             <div className="relative flex justify-between items-center px-1 py-6 gap-2">
                 {/* Connecting Gradient Line */}
-                <div className="absolute top-1/2 left-4 right-4 h-1 bg-gradient-to-r from-slate-300 via-amber-300 via-cyan-300 to-purple-300 -z-0 rounded-full opacity-50"></div>
+                <div className="absolute top-1/2 left-4 right-4 h-1 bg-gradient-to-r from-slate-300 via-amber-300 via-cyan-300 to-purple-300 -z-0 rounded-full opacity-50 dark:opacity-30"></div>
 
                 {renderMetricBox('Inter-Job', interJobTime, benchmarkInterJobTime, Hourglass, 'slate', interJobTime === undefined, tooltips?.interJob)}
                 {renderMetricBox('Travel', travelTime, benchmarkTravelTime, Truck, 'amber', false, tooltips?.travel)}
@@ -146,9 +146,9 @@ export function TaskFlowVisual({
             </div>
 
             {/* Total Duration Bar */}
-            <div className="mt-8 p-4 bg-white/40 rounded-xl border border-white/50">
+            <div className="mt-8 p-4 bg-white/40 dark:bg-[#0b0d10]/40 rounded-xl border border-white/50 dark:border-white/10">
                 <div className="flex justify-between text-sm mb-2">
-                    <span className="text-slate-500 font-medium">Average Time per Task</span>
+                    <span className="text-slate-500 dark:text-slate-400 font-medium">Average Time per Task</span>
                     <div className="flex flex-col items-end">
                         <span className="font-bold text-slate-800 dark:text-white">{formatTime(total)}</span>
                         {hasBenchmark && (
@@ -158,7 +158,7 @@ export function TaskFlowVisual({
                         )}
                     </div>
                 </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex relative">
+                <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden flex relative">
                     {/* Visual bar gradient */}
                     <div className="bg-gradient-to-r from-blue-400 via-amber-400 via-cyan-400 to-purple-500 h-full w-[75%] rounded-full opacity-80"></div>
                 </div>

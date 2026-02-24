@@ -531,7 +531,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
         isTime = false,
         isRate = false,
         logicDescription,
-        colorClass = "text-blue-500",
+        colorClass = "text-blue-400",
         enableViewToggle = false,
         viewMode = 'date',
         onViewModeChange,
@@ -562,9 +562,9 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
         showImprovement?: boolean,                                  // Toggle to show/hide improvement indicators
         isPositiveGood?: boolean                                    // Whether higher values are better (true) or worse (false)
     }) => (
-        <div className="bg-white/60 backdrop-blur-md border border-white/60 rounded-3xl shadow-sm overflow-hidden p-6">
+        <div className="bg-[#111418] backdrop-blur-md border border-slate-800 rounded-3xl shadow-none overflow-hidden p-6">
             <div className="flex items-center justify-between gap-4 mb-4">
-                <div className="flex items-center gap-2 text-slate-700">
+                <div className="flex items-center gap-2 text-slate-300">
                     <Icon className={`w-5 h-5 ${colorClass}`} />
                     <h3 className="font-bold text-lg">{title}</h3>
                 </div>
@@ -572,7 +572,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                 {enableViewToggle && onViewModeChange && (
                     <div className="flex items-center gap-4">
                         {/* Radio Button View Toggle */}
-                        <div className="flex items-center gap-3 bg-slate-50/80 rounded-lg p-1.5 border border-slate-200">
+                        <div className="flex items-center gap-3 bg-[#0f1115] rounded-lg p-1.5 border border-slate-800">
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input
                                     type="radio"
@@ -580,9 +580,9 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                     value="date"
                                     checked={viewMode === 'date'}
                                     onChange={() => onViewModeChange('date')}
-                                    className="w-4 h-4 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                                    className="w-4 h-4 text-blue-400 focus:ring-2 focus:ring-blue-500"
                                 />
-                                <span className="text-sm font-medium text-slate-700">By Date</span>
+                                <span className="text-sm font-medium text-slate-300">By Date</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input
@@ -591,9 +591,9 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                     value="user"
                                     checked={viewMode === 'user'}
                                     onChange={() => onViewModeChange('user')}
-                                    className="w-4 h-4 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                                    className="w-4 h-4 text-blue-400 focus:ring-2 focus:ring-blue-500"
                                 />
-                                <span className="text-sm font-medium text-slate-700">By User</span>
+                                <span className="text-sm font-medium text-slate-300">By User</span>
                             </label>
                         </div>
 
@@ -603,17 +603,18 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                 <select
                                     value={selectedDate || ''}
                                     onChange={(e) => onDateChange(e.target.value || null)}
-                                    className="px-3 py-1.5 text-sm bg-white/80 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700"
+                                    className="px-3 py-1.5 text-sm bg-[#111418] border border-slate-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-300"
+                                    style={{ colorScheme: 'dark' }}
                                 >
-                                    <option value="">All Dates</option>
+                                    <option value="" className="bg-[#111418] text-slate-300">All Dates</option>
                                     {availableDates.map(date => (
-                                        <option key={date} value={date}>{date}</option>
+                                        <option key={date} value={date} className="bg-[#111418] text-slate-300">{date}</option>
                                     ))}
                                 </select>
                                 {selectedDate && (
                                     <button
                                         onClick={() => onDateChange(null)}
-                                        className="text-slate-400 hover:text-slate-600 transition-colors"
+                                        className="text-slate-400 hover:text-slate-200 transition-colors"
                                         title="Clear filter"
                                     >
                                         ×
@@ -628,15 +629,15 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left border-collapse">
                     <thead>
-                        <tr className="border-b border-slate-200">
-                            <th className="px-4 py-3 font-semibold text-slate-500 bg-slate-50/50">{rowLabel}</th>
+                        <tr className="border-b border-slate-800">
+                            <th className="px-4 py-3 font-semibold text-slate-400 bg-[#0f1115]">{rowLabel}</th>
                             {tableData.columns.map(col => (
-                                <th key={col} className="px-4 py-3 font-semibold text-slate-600 bg-slate-50/50 text-right tabular-nums">
+                                <th key={col} className="px-4 py-3 font-semibold text-slate-400 bg-[#0f1115] text-right tabular-nums">
                                     {col}
                                 </th>
                             ))}
-                            <th className="px-4 py-3 font-bold text-slate-700 bg-slate-100/50 text-right border-l border-slate-200">Total</th>
-                            <th className={`px-4 py-3 font-bold text-right border-l border-slate-200 ${colorClass.replace('text-', 'text-').replace('500', '700')} bg-slate-50/50`}>Avg</th>
+                            <th className="px-4 py-3 font-bold text-slate-300 bg-slate-900/50 text-right border-l border-slate-800">Total</th>
+                            <th className={`px-4 py-3 font-bold text-right border-l border-slate-800 ${colorClass.replace('text-', 'text-').replace('500', '700')} bg-[#0f1115]`}>Avg</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -644,8 +645,8 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                             const benchmarkRow = benchmarkData?.rows[idx];
 
                             return (
-                                <tr key={idx} className="border-b border-slate-100 hover:bg-white/50 transition-colors">
-                                    <td className="px-4 py-3 font-medium text-slate-800 tabular-nums whitespace-nowrap">{row.date}</td>
+                                <tr key={idx} className="border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors">
+                                    <td className="px-4 py-3 font-medium text-slate-100 tabular-nums whitespace-nowrap">{row.date}</td>
                                     {row.values.map((val, i) => {
                                         const benchmarkVal = benchmarkRow?.values[i];
 
@@ -662,14 +663,14 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                         }
 
                                         return (
-                                            <td key={i} className={`px-4 py-3 text-right tabular-nums ${val === 0 ? 'text-slate-300' : 'text-slate-600'}`}>
+                                            <td key={i} className={`px-4 py-3 text-right tabular-nums ${val === 0 ? 'text-slate-300' : 'text-slate-400'}`}>
                                                 <div className="flex flex-col items-end gap-0.5">
                                                     <div>
                                                         {val > 0 ? (isTasks ? val.toLocaleString() : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : '-'}
                                                         {val > 0 && isTime && <span className="text-[10px] text-slate-400 ml-0.5">m</span>}
                                                     </div>
                                                     {delta && (
-                                                        <div className={`flex items-center gap-0.5 text-[10px] font-medium ${delta.isImprovement ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        <div className={`flex items-center gap-0.5 text-[10px] font-medium ${delta.isImprovement ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                             {delta.isPositive ? (
                                                                 <ArrowUpRight className="w-2.5 h-2.5" />
                                                             ) : (
@@ -682,11 +683,11 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                             </td>
                                         );
                                     })}
-                                    <td className="px-4 py-3 font-bold text-slate-900 text-right bg-slate-50/30 border-l border-slate-200">
+                                    <td className="px-4 py-3 font-bold text-white text-right bg-slate-900/50 border-l border-slate-800">
                                         {row.total.toLocaleString(undefined, { minimumFractionDigits: (isRate || isTime) ? 2 : 0, maximumFractionDigits: (isRate || isTime) ? 2 : 0 })}
-                                        {isTime && <span className="text-[10px] text-slate-500 ml-0.5">m</span>}
+                                        {isTime && <span className="text-[10px] text-slate-400 ml-0.5">m</span>}
                                     </td>
-                                    <td className={`px-4 py-3 font-bold text-right border-l border-slate-200 bg-slate-50/30 ${colorClass.replace('text-', 'text-').replace('500', '600')}`}>
+                                    <td className={`px-4 py-3 font-bold text-right border-l border-slate-800 bg-slate-900/50 ${colorClass.replace('text-', 'text-').replace('500', '600')}`}>
                                         {(() => {
                                             const avgValue = row.average;
                                             const benchmarkAvg = benchmarkRow?.average;
@@ -707,7 +708,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                                 <div className="flex flex-col items-end gap-0.5">
                                                     <div>{avgValue.toFixed(2)}</div>
                                                     {avgDelta && (
-                                                        <div className={`flex items-center gap-0.5 text-[10px] font-medium ${avgDelta.isImprovement ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        <div className={`flex items-center gap-0.5 text-[10px] font-medium ${avgDelta.isImprovement ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                             {avgDelta.isPositive ? (
                                                                 <ArrowUpRight className="w-2.5 h-2.5" />
                                                             ) : (
@@ -724,18 +725,18 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                             );
                         })}
                         {/* Totals Row */}
-                        <tr className="bg-slate-100/50 border-t-2 border-slate-200 font-bold">
-                            <td className="px-4 py-3 text-slate-700">{isRate ? 'Weighted Avg' : 'Total'}</td>
+                        <tr className="bg-slate-900/50 border-t-2 border-slate-800 font-bold">
+                            <td className="px-4 py-3 text-slate-300">{isRate ? 'Weighted Avg' : 'Total'}</td>
                             {tableData.columnTotals.map((tot, i) => (
-                                <td key={i} className="px-4 py-3 text-right text-slate-800 tabular-nums">
+                                <td key={i} className="px-4 py-3 text-right text-slate-100 tabular-nums">
                                     {tot.toLocaleString(undefined, { minimumFractionDigits: (isRate || isTime) ? 2 : 0, maximumFractionDigits: (isRate || isTime) ? 2 : 0 })}
-                                    {isTime && <span className="text-[10px] text-slate-500 ml-0.5">m</span>}
+                                    {isTime && <span className="text-[10px] text-slate-400 ml-0.5">m</span>}
                                 </td>
                             ))}
-                            <td className={`px-4 py-3 text-right border-l border-slate-300 ${colorClass.replace('text-', 'text-').replace('500', '600')}`}>
+                            <td className={`px-4 py-3 text-right border-l border-slate-700 ${colorClass.replace('text-', 'text-').replace('500', '600')}`}>
                                 {isRate ? '-' : tableData.rows.reduce((sum, r) => sum + r.total, 0).toLocaleString()}
                             </td>
-                            <td className={`px-4 py-3 text-right border-l border-slate-300 ${colorClass.replace('text-', 'text-').replace('500', '700')}`}>
+                            <td className={`px-4 py-3 text-right border-l border-slate-700 ${colorClass.replace('text-', 'text-').replace('500', '700')}`}>
                                 {tableData.totalRowAverage.toFixed(2)}
                             </td>
                         </tr>
@@ -743,11 +744,11 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                 </table>
             </div>
 
-            <div className="mt-6 bg-slate-50/80 rounded-xl p-4 border border-slate-100">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Calculation Methodology</h4>
+            <div className="mt-6 bg-[#0f1115] rounded-xl p-4 border border-slate-800/50">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Calculation Methodology</h4>
                 <ul className="space-y-1">
                     {logicDescription.map((line, i) => (
-                        <li key={i} className="text-xs text-slate-600 flex items-start gap-2">
+                        <li key={i} className="text-xs text-slate-400 flex items-start gap-2">
                             <span className="block w-1 h-1 rounded-full bg-slate-400 mt-1.5 shrink-0" />
                             {line}
                         </li>
@@ -760,16 +761,16 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             {/* Header */}
-            <div className="flex items-center gap-4 border-b border-slate-200 pb-4">
+            <div className="flex items-center gap-4 border-b border-slate-800 pb-4">
                 <button
                     onClick={onBack}
-                    className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors"
+                    className="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
                 >
                     <ArrowLeft className="w-6 h-6" />
                 </button>
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Supportive Data</h2>
-                    <p className="text-slate-500 text-sm">Forensic Data Breakdown: {metric}</p>
+                    <h2 className="text-2xl font-bold text-slate-100">Supportive Data</h2>
+                    <p className="text-slate-400 text-sm">Forensic Data Breakdown: {metric}</p>
                 </div>
             </div>
 
@@ -784,13 +785,13 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                     {/* Picking Process */}
                     <div className="space-y-8">
                         <div className="flex items-center gap-3">
-                            <div className="h-8 w-1.5 bg-blue-600 rounded-full shadow-sm shadow-blue-200" />
-                            <h2 className="text-2xl font-bold text-slate-800">PICKING SUPPORTIVE DATA</h2>
+                            <div className="h-8 w-1.5 bg-blue-600 rounded-full shadow-none shadow-blue-200" />
+                            <h2 className="text-2xl font-bold text-slate-100">PICKING SUPPORTIVE DATA</h2>
                         </div>
 
                         {/* Section 1: Throughput */}
                         <section className="space-y-6">
-                            <h3 className="text-lg font-bold text-slate-600 border-l-4 border-blue-400 pl-3">UPH Based on Throughput (Hourly Average)</h3>
+                            <h3 className="text-lg font-bold text-slate-400 border-l-4 border-blue-400 pl-3">UPH Based on Throughput (Hourly Average)</h3>
                             <div className="grid grid-cols-1 gap-6">
                                 <MatrixTable
                                     title="Hourly Picking Flow Matrix (Units)"
@@ -857,7 +858,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
 
                         {/* Section 2: Pure Active */}
                         <section className="space-y-6">
-                            <h3 className="text-lg font-bold text-slate-600 border-l-4 border-emerald-400 pl-3">UPH Based on Performance (Pure Active)</h3>
+                            <h3 className="text-lg font-bold text-slate-400 border-l-4 border-emerald-400 pl-3">UPH Based on Performance (Pure Active)</h3>
                             <div className="grid grid-cols-1 gap-6">
                                 <MatrixTable
                                     title="Hourly Active Picking Time Matrix (Minutes)"
@@ -867,7 +868,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                     isPositiveGood={false}
                                     icon={Clock}
                                     isTime={true}
-                                    colorClass="text-emerald-600"
+                                    colorClass="text-emerald-400"
                                     enableViewToggle={true}
                                     viewMode={pickingTimeViewMode}
                                     onViewModeChange={setPickingTimeViewMode}
@@ -899,7 +900,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                     isPositiveGood={true}
                                     icon={Zap}
                                     isRate={true}
-                                    colorClass="text-emerald-600"
+                                    colorClass="text-emerald-400"
                                     enableViewToggle={true}
                                     viewMode={pickingTimeViewMode}
                                     onViewModeChange={setPickingTimeViewMode}
@@ -927,7 +928,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
 
                         {/* Section 3: Occupancy */}
                         <section className="space-y-6">
-                            <h3 className="text-lg font-bold text-slate-600 border-l-4 border-indigo-400 pl-3">UPH Based on Cost (Occupancy)</h3>
+                            <h3 className="text-lg font-bold text-slate-400 border-l-4 border-indigo-400 pl-3">UPH Based on Cost (Occupancy)</h3>
                             <div className="grid grid-cols-1 gap-6">
                                 <MatrixTable
                                     title="Hourly Picking Shift Span Matrix (Minutes)"
@@ -1002,13 +1003,13 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                     {/* Packing Process */}
                     <div className="space-y-8">
                         <div className="flex items-center gap-3">
-                            <div className="h-8 w-1.5 bg-fuchsia-600 rounded-full shadow-sm shadow-fuchsia-200" />
-                            <h2 className="text-2xl font-bold text-slate-800">PACKING SUPPORTIVE DATA</h2>
+                            <div className="h-8 w-1.5 bg-fuchsia-600 rounded-full shadow-none shadow-fuchsia-200" />
+                            <h2 className="text-2xl font-bold text-slate-100">PACKING SUPPORTIVE DATA</h2>
                         </div>
 
                         {/* Section 1: Throughput */}
                         <section className="space-y-6">
-                            <h3 className="text-lg font-bold text-slate-600 border-l-4 border-fuchsia-400 pl-3">UPH Based on Throughput (Hourly Average)</h3>
+                            <h3 className="text-lg font-bold text-slate-400 border-l-4 border-fuchsia-400 pl-3">UPH Based on Throughput (Hourly Average)</h3>
                             <div className="grid grid-cols-1 gap-6">
                                 <MatrixTable
                                     title="Hourly Packing Flow Matrix (Units)"
@@ -1077,7 +1078,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
 
                         {/* Section 2: Pure Active */}
                         <section className="space-y-6">
-                            <h3 className="text-lg font-bold text-slate-600 border-l-4 border-teal-400 pl-3">UPH Based on Performance (Pure Active)</h3>
+                            <h3 className="text-lg font-bold text-slate-400 border-l-4 border-teal-400 pl-3">UPH Based on Performance (Pure Active)</h3>
                             <div className="grid grid-cols-1 gap-6">
                                 <MatrixTable
                                     title="Hourly Active Packing Time Matrix (Minutes)"
@@ -1147,7 +1148,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
 
                         {/* Section 3: Occupancy */}
                         <section className="space-y-6">
-                            <h3 className="text-lg font-bold text-slate-600 border-l-4 border-rose-400 pl-3">UPH Based on Cost (Occupancy)</h3>
+                            <h3 className="text-lg font-bold text-slate-400 border-l-4 border-rose-400 pl-3">UPH Based on Cost (Occupancy)</h3>
                             <div className="grid grid-cols-1 gap-6">
                                 <MatrixTable
                                     title="Hourly Packing Shift Span Matrix (Minutes)"
@@ -1157,7 +1158,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                     isPositiveGood={false}
                                     icon={Clock}
                                     isTime={true}
-                                    colorClass="text-rose-600"
+                                    colorClass="text-rose-400"
                                     enableViewToggle={true}
                                     viewMode={packingSpanViewMode}
                                     onViewModeChange={setPackingSpanViewMode}
@@ -1189,7 +1190,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                     isPositiveGood={true}
                                     icon={Zap}
                                     isRate={true}
-                                    colorClass="text-rose-600"
+                                    colorClass="text-rose-400"
                                     enableViewToggle={true}
                                     viewMode={packingSpanViewMode}
                                     onViewModeChange={setPackingSpanViewMode}
@@ -1222,8 +1223,8 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                     {/* Picking Utilization */}
                     <div className="space-y-8">
                         <div className="flex items-center gap-3">
-                            <div className="h-8 w-1.5 bg-blue-600 rounded-full shadow-sm shadow-blue-200" />
-                            <h2 className="text-2xl font-bold text-slate-800">PICKING UTILIZATION</h2>
+                            <div className="h-8 w-1.5 bg-blue-600 rounded-full shadow-none shadow-blue-200" />
+                            <h2 className="text-2xl font-bold text-slate-100">PICKING UTILIZATION</h2>
                         </div>
                         <div className="grid grid-cols-1 gap-6">
                             <MatrixTable
@@ -1234,7 +1235,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                 isPositiveGood={true}
                                 icon={Clock}
                                 isTime={true}
-                                colorClass="text-blue-600"
+                                colorClass="text-blue-400"
                                 enableViewToggle={true}
                                 viewMode={pickingUtilizationViewMode}
                                 onViewModeChange={setPickingUtilizationViewMode}
@@ -1296,7 +1297,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                 isPositiveGood={true}
                                 icon={Zap}
                                 isRate={true}
-                                colorClass="text-emerald-600"
+                                colorClass="text-emerald-400"
                                 enableViewToggle={true}
                                 viewMode={pickingUtilizationViewMode}
                                 onViewModeChange={setPickingUtilizationViewMode}
@@ -1327,8 +1328,8 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                     {/* Packing Utilization */}
                     <div className="space-y-8">
                         <div className="flex items-center gap-3">
-                            <div className="h-8 w-1.5 bg-fuchsia-600 rounded-full shadow-sm shadow-fuchsia-200" />
-                            <h2 className="text-2xl font-bold text-slate-800">PACKING UTILIZATION</h2>
+                            <div className="h-8 w-1.5 bg-fuchsia-600 rounded-full shadow-none shadow-fuchsia-200" />
+                            <h2 className="text-2xl font-bold text-slate-100">PACKING UTILIZATION</h2>
                         </div>
                         <div className="grid grid-cols-1 gap-6">
                             <MatrixTable
@@ -1370,7 +1371,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                                 isPositiveGood={false}
                                 icon={Clock}
                                 isTime={true}
-                                colorClass="text-rose-600"
+                                colorClass="text-rose-400"
                                 enableViewToggle={true}
                                 viewMode={packingUtilizationViewMode}
                                 onViewModeChange={setPackingUtilizationViewMode}
@@ -1433,7 +1434,7 @@ export function MetricSupportView({ data, metric, onBack, benchmarkData, isBench
                     Refer to the Forensic Data Breakdown above for statistical validation.
                 </div>
             ) : (
-                <div className="p-12 text-center text-slate-400 bg-slate-50 rounded-3xl border border-dashed border-slate-300">
+                <div className="p-12 text-center text-slate-400 bg-[#111418] rounded-3xl border border-dashed border-slate-700">
                     Feature under construction for metric: {metric}
                 </div>
             )

@@ -43,19 +43,19 @@ export const RichTooltipContainer = ({
 
         {/* Includes / Excludes Section */}
         {(includes || excludes) && (
-            <div className="space-y-2 mb-3 bg-slate-800/50 p-2 rounded border border-slate-700/50">
+            <div className="space-y-2 mb-3 bg-slate-800/50 p-2.5 rounded border border-slate-700/50">
                 {includes && includes.length > 0 && (
                     <div className="flex gap-2 items-start">
-                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mt-0.5 min-w-[50px]">Includes:</span>
-                        <div className="text-[10px] text-slate-300 leading-tight">
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mt-0.5 shrink-0">Includes:</span>
+                        <div className="text-[10px] text-slate-300 leading-relaxed">
                             {includes.join(", ")}
                         </div>
                     </div>
                 )}
                 {excludes && excludes.length > 0 && (
                     <div className="flex gap-2 items-start">
-                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider mt-0.5 min-w-[50px]">Excludes:</span>
-                        <div className="text-[10px] text-slate-300 leading-tight">
+                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider mt-0.5 shrink-0">Excludes:</span>
+                        <div className="text-[10px] text-slate-300 leading-relaxed">
                             {excludes.join(", ")}
                         </div>
                     </div>

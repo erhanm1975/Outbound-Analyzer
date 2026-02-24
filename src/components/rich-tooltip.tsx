@@ -14,16 +14,44 @@ interface RichTooltipProps {
 export function RichTooltip({ content, children, className, trigger, style }: RichTooltipProps) {
     const [isVisible, setIsVisible] = useState(false);
     const [position, setPosition] = useState({ top: 0, left: 0 });
+    const [placement, setPlacement] = useState<'top' | 'bottom'>('top');
+    const [arrowLeftPx, setArrowLeftPx] = useState<number | null>(null); // null = centered (50%)
     const triggerRef = useRef<HTMLDivElement>(null);
+
+    const TOOLTIP_WIDTH = 288; // w-72 = 18rem = 288px
+    const EDGE_PADDING = 12; // px from viewport edge
 
     const updatePosition = () => {
         if (triggerRef.current) {
             const rect = triggerRef.current.getBoundingClientRect();
-            // Position above the element, centered horizontally
-            // 12px gap
+            const viewportWidth = window.innerWidth;
+
+            // Vertical: flip to bottom if too close to top
+            const newPlacement = rect.top < 150 ? 'bottom' : 'top';
+            setPlacement(newPlacement);
+
+            // Horizontal: center on trigger, then clamp to viewport
+            const triggerCenterX = rect.left + rect.width / 2;
+            const halfTooltip = TOOLTIP_WIDTH / 2;
+
+            let tooltipLeft = triggerCenterX - halfTooltip;
+            let arrowOffset: number | null = null; // null = centered
+
+            // Clamp right edge
+            if (tooltipLeft + TOOLTIP_WIDTH > viewportWidth - EDGE_PADDING) {
+                tooltipLeft = viewportWidth - TOOLTIP_WIDTH - EDGE_PADDING;
+                arrowOffset = triggerCenterX - tooltipLeft; // arrow points at trigger
+            }
+            // Clamp left edge
+            if (tooltipLeft < EDGE_PADDING) {
+                tooltipLeft = EDGE_PADDING;
+                arrowOffset = triggerCenterX - tooltipLeft;
+            }
+
+            setArrowLeftPx(arrowOffset);
             setPosition({
-                top: rect.top - 12,
-                left: rect.left + rect.width / 2
+                top: newPlacement === 'top' ? rect.top - 12 : rect.bottom + 12,
+                left: tooltipLeft
             });
         }
     };
@@ -44,6 +72,11 @@ export function RichTooltip({ content, children, className, trigger, style }: Ri
         };
     }, [isVisible]);
 
+    // Arrow style: centered by default, or pinned to exact px when clamped
+    const arrowStyle: React.CSSProperties = arrowLeftPx !== null
+        ? { left: `${arrowLeftPx}px`, transform: 'translateX(-50%)' }
+        : { left: '50%', transform: 'translateX(-50%)' };
+
     return (
         <div
             ref={triggerRef}
@@ -57,15 +90,22 @@ export function RichTooltip({ content, children, className, trigger, style }: Ri
 
             {isVisible && createPortal(
                 <div
-                    className="fixed z-[9999] pointer-events-none transition-all duration-200"
+                    className="fixed z-[99999] pointer-events-none"
                     style={{ top: position.top, left: position.left }}
                 >
                     {/* Tooltip Body */}
-                    <div className="relative transform -translate-x-1/2 -translate-y-full w-72 p-3 bg-slate-800/95 text-white text-xs rounded-xl shadow-xl backdrop-blur-sm border border-white/10">
+                    <div className={cn(
+                        "relative w-72 p-3 bg-slate-800/95 text-white text-xs rounded-xl shadow-xl backdrop-blur-sm border border-white/10",
+                        placement === 'top' ? "-translate-y-full" : ""
+                    )}>
                         {content}
 
-                        {/* Arrow (Down) */}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-slate-800/95"></div>
+                        {/* Arrow */}
+                        {placement === 'top' ? (
+                            <div className="absolute top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-slate-800/95" style={arrowStyle}></div>
+                        ) : (
+                            <div className="absolute bottom-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-slate-800/95" style={arrowStyle}></div>
+                        )}
                     </div>
                 </div>,
                 document.body

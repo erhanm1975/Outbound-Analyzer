@@ -17,7 +17,7 @@ export function DashboardSection({ title, description, children, color = "bg-sla
                 <div className="flex items-center gap-2">
                     <div className={cn("h-4 w-1 rounded-full", color)}></div>
                     <div>
-                        <h3 className="text-slate-500 font-semibold uppercase tracking-wider text-xs">{title}</h3>
+                        <h3 className="text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-xs">{title}</h3>
                         {description && <p className="text-slate-400 text-xs mt-0.5">{description}</p>}
                     </div>
                 </div>
