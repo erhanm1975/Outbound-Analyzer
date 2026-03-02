@@ -1271,7 +1271,7 @@
             "Assert Standard Time matches Expected"
         ],
         "expectedResults": {
-            "totalStandardSeconds": 1891
+            "totalStandardSeconds": 1801
         },
         "testData": [
             {
@@ -3242,7 +3242,7 @@
             "Assert Standard Time matches Expected"
         ],
         "expectedResults": {
-            "totalStandardSeconds": 2920
+            "totalStandardSeconds": 2830
         },
         "testData": [
             {

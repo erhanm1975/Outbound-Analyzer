@@ -1,5 +1,7 @@
 import type { ShiftRecord, TaskObject, ActivityObject, EngineeredStandardsConfig } from '../types';
 import { differenceInSeconds } from 'date-fns';
+import { calculateTaskForensics } from './calculation-service';
+import { TIME } from '../config/constants';
 
 export interface Config {
     smoothingTolerance?: number; // Configurable tolerance
@@ -10,7 +12,7 @@ export interface Config {
 }
 
 const getBatchKey = (r: ShiftRecord) => {
-    return `${r.User}|${r.Start.getTime()}|${r.Finish.getTime()}|${r.Location}`;
+    return `${r.User}|${r.Start.getTime()}|${r.Finish.getTime()}|${r.Location}|${r.JobCode || 'Unassigned'}`;
 };
 
 export function processWarehouseLogic(records: ShiftRecord[], config: Config = {}): { tasks: TaskObject[], activities: ActivityObject[] } {
@@ -73,7 +75,9 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
     taskObjects.sort((a, b) => {
         if (a.User < b.User) return -1;
         if (a.User > b.User) return 1;
-        return a.Start.getTime() - b.Start.getTime();
+        const startDiff = a.Start.getTime() - b.Start.getTime();
+        if (startDiff !== 0) return startDiff;
+        return a.Finish.getTime() - b.Finish.getTime();
     });
 
     const smoothedTasks: TaskObject[] = [];
@@ -102,13 +106,16 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
                 if (cluster.length > 1) {
                     const totalProd = cluster.reduce((sum, t) => sum + t.ProductiveDurationSec, 0);
                     const totalUnprod = cluster.reduce((sum, t) => sum + t.UnproductiveDurationSec, 0);
+                    const totalOriginal = cluster.reduce((sum, t) => sum + t.OriginalDurationSec, 0);
 
                     const avgProd = totalProd / cluster.length;
                     const avgUnprod = totalUnprod / cluster.length;
+                    const avgOriginal = totalOriginal / cluster.length;
 
                     cluster.forEach(t => {
                         t.ProductiveDurationSec = avgProd;
                         t.UnproductiveDurationSec = avgUnprod;
+                        t.OriginalDurationSec = avgOriginal;
                         smoothedTasks.push(t);
                     });
                 } else {
@@ -120,13 +127,16 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
         if (cluster.length > 1) {
             const totalProd = cluster.reduce((sum, t) => sum + t.ProductiveDurationSec, 0);
             const totalUnprod = cluster.reduce((sum, t) => sum + t.UnproductiveDurationSec, 0);
+            const totalOriginal = cluster.reduce((sum, t) => sum + t.OriginalDurationSec, 0);
 
             const avgProd = totalProd / cluster.length;
             const avgUnprod = totalUnprod / cluster.length;
+            const avgOriginal = totalOriginal / cluster.length;
 
             cluster.forEach(t => {
                 t.ProductiveDurationSec = avgProd;
                 t.UnproductiveDurationSec = avgUnprod;
+                t.OriginalDurationSec = avgOriginal;
                 smoothedTasks.push(t);
             });
         } else if (cluster.length === 1) {
@@ -145,11 +155,7 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
     const visitedOrders = new Set<string>();
     const visitedPackingOrders = new Set<string>();
 
-    const hasExplicitPutwallDownstream = tasksToProcess.some(t => {
-        const type = (t.TaskType || '').toLowerCase();
-        const jt = (t.JobType || '').trim();
-        return jt === 'PUTW' && (type.includes('sort') || type.includes('pack'));
-    });
+    // Removed legacy downstream heuristic hack
 
     tasksToProcess.forEach((task, index) => {
         const isFirst = index === 0;
@@ -185,29 +191,36 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
         // TODO: Line based... just say false for now except if we want it? No, it's just 1 line per task row.
         const isNewLine = true;
 
-        const b = calculateBenchmarks(
-            task, isFirst, isNewVisit, isFirstInActivity, isFirstTaskInJob, isFirstTaskInOrder,
-            isNewLine, isNewSku, isFirstPackingTaskInOrder, hasExplicitPutwallDownstream, config
-        );
-
-        task.ProductiveDurationStandardSec = b.prodStd;
-        task.ProductiveDurationTargetSec = b.prodTgt;
-
-        task.StandardPickingInitSec = b.pickingInitStd;
-        task.StandardPickingProcessSec = b.pickingProcessStd;
-        task.StandardPickingTravelSec = b.pickingTravelStd;
-
-        task.StandardSortingInitSec = b.sortingInitStd;
-        task.StandardSortingProcessSec = b.sortingProcessStd;
-
-        task.StandardPackingInitSec = b.packingInitStd;
-        task.StandardPackingProcessSec = b.packingProcessStd;
+        if (config.engineeredStandards) {
+            calculateTaskForensics(
+                task,
+                {
+                    isFirstTaskInJobFlow: isFirstTaskInJob,
+                    isFirstInJob: isFirstTaskInJob,
+                    isNewVisit,
+                    isNewSku,
+                    isFirstInOrder: isFirstTaskInOrder,
+                    isFirstPackingTaskInOrder
+                },
+                config.engineeredStandards
+            );
+        } else {
+            task.ProductiveDurationStandardSec = 0;
+            task.ProductiveDurationTargetSec = 0;
+            task.StandardPickingInitSec = 0;
+            task.StandardPickingProcessSec = 0;
+            task.StandardPickingTravelSec = 0;
+            task.StandardSortingInitSec = 0;
+            task.StandardSortingProcessSec = 0;
+            task.StandardPackingInitSec = 0;
+            task.StandardPackingProcessSec = 0;
+        }
 
         // Legacy decomposition for unprod
         const rawType = (task.TaskType || '').toLowerCase();
         if (rawType.includes('pick')) {
-            task.TaskDirectTimeSec = task.ProductiveDurationSec * (1 - (config.travelRatio || 0.3));
-            task.TaskTravelTimeSec = task.ProductiveDurationSec * (config.travelRatio || 0.3);
+            task.TaskDirectTimeSec = task.ProductiveDurationSec * (1 - (config.travelRatio || 0.70));
+            task.TaskTravelTimeSec = task.ProductiveDurationSec * (config.travelRatio || 0.70);
         } else if (rawType.includes('sort') || rawType.includes('pack')) {
             task.TaskDirectTimeSec = task.ProductiveDurationSec;
             task.TaskTravelTimeSec = 0;
@@ -225,12 +238,16 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
 
         userTasks.forEach(task => {
             const gapMs = task.Start.getTime() - cursor.getTime();
-            if (gapMs > breakThresholdMs && gapMs < 7200 * 1000) {
+            if (gapMs > breakThresholdMs && gapMs < TIME.TWELVE_HOURS_MS) {
+                // If the break is between two tasks in the SAME job, inherit that JobCode
+                // so the break stays grouped inside the job's ActivityObject.
+                // If it's between different jobs, use 'Unassigned' for a standalone break row.
+                const isIntraJob = task.JobCode === lastJobCode && lastJobCode !== 'Unassigned';
                 filled.push({
                     User: task.User,
                     Client: task.Client,
                     WaveCode: 'N/A',
-                    JobCode: 'Unassigned',
+                    JobCode: isIntraJob ? lastJobCode : 'Break',
                     JobType: 'Break',
                     OrderCode: 'Unknown',
                     TaskType: 'Implicit Break/Delay',
@@ -283,15 +300,45 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
 
         const flushBlock = (blk: any) => {
             let prodDur = 0, unprodDur = 0, direct = 0, travel = 0, units = 0;
+            let prodStd = 0, prodTgt = 0;
+            let pickInit = 0, pickProc = 0, pickTrav = 0;
+            let sortInit = 0, sortProc = 0;
+            let packInit = 0, packProc = 0;
+
+            // Targets
+            let tPickInit = 0, tPickProc = 0, tPickTrav = 0;
+            let tSortInit = 0, tSortProc = 0;
+            let tPackInit = 0, tPackProc = 0;
+
             const taskTypes = new Set<string>();
             const orderCodes = new Set<string>();
 
             blk.Tasks.forEach((t: any) => {
-                prodDur += t.ProductiveDurationSec;
-                unprodDur += t.UnproductiveDurationSec;
-                direct += t.TaskDirectTimeSec;
-                travel += t.TaskTravelTimeSec;
-                units += t.Quantity;
+                prodDur += t.ProductiveDurationSec || 0;
+                unprodDur += t.UnproductiveDurationSec || 0;
+                direct += t.TaskDirectTimeSec || 0;
+                travel += t.TaskTravelTimeSec || 0;
+                units += t.Quantity || 0;
+
+                // Aggregate Standards
+                prodStd += t.ProductiveDurationStandardSec || 0;
+                prodTgt += t.ProductiveDurationTargetSec || 0;
+                pickInit += t.StandardPickingInitSec || 0;
+                pickProc += t.StandardPickingProcessSec || 0;
+                pickTrav += t.StandardPickingTravelSec || 0;
+                sortInit += t.StandardSortingInitSec || 0;
+                sortProc += t.StandardSortingProcessSec || 0;
+                packInit += t.StandardPackingInitSec || 0;
+                packProc += t.StandardPackingProcessSec || 0;
+
+                tPickInit += t.TargetPickingInitSec || 0;
+                tPickProc += t.TargetPickingProcessSec || 0;
+                tPickTrav += t.TargetPickingTravelSec || 0;
+                tSortInit += t.TargetSortingInitSec || 0;
+                tSortProc += t.TargetSortingProcessSec || 0;
+                tPackInit += t.TargetPackingInitSec || 0;
+                tPackProc += t.TargetPackingProcessSec || 0;
+
                 if (t.TaskType) taskTypes.add(t.TaskType);
                 if (t.OrderCode && t.OrderCode !== 'Unknown' && t.OrderCode !== '') orderCodes.add(t.OrderCode);
             });
@@ -301,6 +348,7 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
                 User: user,
                 Activity: Array.from(taskTypes).join('|'),
                 JobCode: blk.JobCode === 'Unassigned' ? null : blk.JobCode,
+                JobType: blk.JobType || 'Unknown',
                 Start: blk.Start,
                 Finish: blk.Finish,
                 ProductiveDurationSec: prodDur,
@@ -308,23 +356,47 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
                 TaskDirectTimeSec: direct,
                 TaskTravelTimeSec: travel,
                 NofOrders: orderCodes.size,
-                NofTasks: blk.Tasks.length,
+                NofTasks: blk.Tasks.filter((t: any) => t.JobType !== 'Break' && t.TaskType !== 'Implicit Break/Delay').length,
                 NofUnits: units,
                 AvgTaskDurationSec: (prodDur + unprodDur) / blk.Tasks.length,
-                AvgTravelDurationSec: travel / blk.Tasks.length
+                AvgTravelDurationSec: travel / blk.Tasks.length,
+                ProductiveDurationStandardSec: prodStd,
+                ProductiveDurationTargetSec: prodTgt,
+                PickingInit: pickInit,
+                PickingProcess: pickProc,
+                PickingTravel: pickTrav,
+                SortingInit: sortInit,
+                SortingProcess: sortProc,
+                PackingInit: packInit,
+                PackingProcess: packProc,
+                TargetPickingInit: tPickInit,
+                TargetPickingProcess: tPickProc,
+                TargetPickingTravel: tPickTrav,
+                TargetSortingInit: tSortInit,
+                TargetSortingProcess: tSortProc,
+                TargetPackingInit: tPackInit,
+                TargetPackingProcess: tPackProc
             });
         };
 
         filledTasks.forEach(task => {
             if (!currentBlock) {
-                currentBlock = { JobCode: task.JobCode, Start: task.Start, Finish: task.Finish, Tasks: [task] };
+                currentBlock = { JobCode: task.JobCode, JobType: task.JobType, Start: task.Start, Finish: task.Finish, Tasks: [task] };
             } else {
-                if (task.JobCode === currentBlock.JobCode) {
+                // To be in the same block, they must share the identical JobCode.
+                // However, an injected 'Break' JobType should NEVER mix with a productive JobType, even if both have JobCode 'Unassigned' or 'Break'.
+                let isSameBlock = task.JobCode === currentBlock.JobCode;
+
+                if ((task.JobCode === 'Unassigned' || task.JobCode === 'Break') && task.JobType !== currentBlock.Tasks[0].JobType) {
+                    isSameBlock = false;
+                }
+
+                if (isSameBlock) {
                     currentBlock.Tasks.push(task);
                     if (task.Finish > currentBlock.Finish) currentBlock.Finish = task.Finish;
                 } else {
                     flushBlock(currentBlock);
-                    currentBlock = { JobCode: task.JobCode, Start: task.Start, Finish: task.Finish, Tasks: [task] };
+                    currentBlock = { JobCode: task.JobCode, JobType: task.JobType, Start: task.Start, Finish: task.Finish, Tasks: [task] };
                 }
             }
         });
@@ -333,147 +405,4 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
     });
 
     return { tasks: allFilledTasks, activities: activityObjectsArr };
-}
-
-function calculateBenchmarks(
-    task: TaskObject,
-    isFirst: boolean,
-    isNewVisit: boolean,
-    isFirstInActivity: boolean,
-    isFirstTaskInJob: boolean,
-    isFirstTaskInOrder: boolean,
-    isNewLine: boolean,
-    isNewSku: boolean,
-    isFirstPackingTaskInOrder: boolean,
-    hasExplicitPutwallDownstream: boolean,
-    config: Config
-) {
-    let pickingInitStd = 0, pickingTravelStd = 0, pickingProcessStd = 0;
-    let sortingInitStd = 0, sortingProcessStd = 0;
-    let packingInitStd = 0, packingProcessStd = 0;
-
-    let prodStd = 0, prodTgt = 0;
-
-    const taskType = (task.TaskType || '').toLowerCase();
-    const flowClass = task.JobType || 'Unknown';
-
-    if (taskType.includes('break') || taskType.includes('delay')) {
-        return { pickingInitStd, pickingTravelStd, pickingProcessStd, sortingInitStd, sortingProcessStd, packingInitStd, packingProcessStd, prodStd, prodTgt };
-    }
-
-    const applyMultiplier = (act: any) => {
-        if (act.bucket === 'Job Overhead') return isFirstTaskInJob ? 1 : 0;
-        if (act.bucket === 'Activity Overhead') return isFirstInActivity ? 1 : 0;
-        if (act.bucket === 'Location Based') return isNewVisit ? 1 : 0;
-        if (act.bucket === 'SKU Base') return isNewSku ? 1 : 0;
-        if (act.bucket === 'Line Based') return isNewLine ? 1 : 0;
-        if (act.bucket === 'Order Base') {
-            if (taskType.includes('pack')) return isFirstPackingTaskInOrder ? 1 : 0;
-            return isFirstTaskInOrder ? 1 : 0;
-        }
-        if (act.bucket === 'Unit Variable') return task.Quantity || 0;
-        return task.Quantity || 0;
-    };
-
-    const getVar = (cardId: string, bucket: string) => {
-        if (!config?.engineeredStandards?.cards) return { std: 0, tgt: 0 };
-        const card = config.engineeredStandards.cards.find((c: any) => c.id === cardId);
-        if (!card) return { std: 0, tgt: 0 };
-        const variable = card.variables.find((v: any) => v.bucket === bucket || v.name === bucket);
-        return { std: variable?.value || 0, tgt: variable?.targetValue || 0 };
-    };
-
-    const getActs = (cardId: string) => {
-        if (!config?.engineeredStandards?.cards) return [];
-        const card = config.engineeredStandards.cards.find((c: any) => c.id === cardId);
-        return card?.activities || [];
-    };
-
-    let pickingCardId = 'picking_generic';
-    let sortingCardId = 'sorting_generic';
-    let packingCardId = 'packing_duration';
-
-    if (flowClass === 'PUTW') { pickingCardId = 'picking_putwall'; sortingCardId = 'sorting_putwall'; packingCardId = 'packing_putwall'; }
-    else if (flowClass === 'OBPP') { pickingCardId = 'picking_obpp'; packingCardId = 'packing_obpp'; }
-    else if (flowClass === 'MICP') { pickingCardId = 'picking_micp'; packingCardId = 'packing_micp'; }
-    else if (flowClass === 'SICP') { pickingCardId = 'picking_sicp'; packingCardId = 'packing_sicp'; }
-    else if (flowClass === 'SIBP') { pickingCardId = 'picking_sibp'; packingCardId = 'packing_sibp'; }
-    else if (flowClass === 'IIBP') { pickingCardId = 'picking_iibp'; packingCardId = 'packing_iibp'; }
-    else if (flowClass === 'IOBP') { pickingCardId = 'picking_iobp'; packingCardId = 'packing_iobp'; }
-
-    const evaluateCard = (cId: string, applyFirstJobInit: boolean) => {
-        let initStd = 0, initTgt = 0;
-        let travelStd = 0, travelTgt = 0;
-        let processStd = 0, processTgt = 0;
-
-        const cardActs = getActs(cId);
-        if (!cardActs) return { initStd, initTgt, travelStd, travelTgt, processStd, processTgt };
-
-        cardActs.forEach((act: any) => {
-            const isTravel = act.name.toLowerCase().includes('travel') || act.bucket === 'Travel';
-            const isOverhead = act.bucket === 'Job Overhead';
-            const mult = applyMultiplier(act);
-
-            const stdLocal = act.value !== undefined ? act.value : act.defaultSeconds !== undefined ? act.defaultSeconds : act.std !== undefined ? act.std : 0;
-            const tgtLocal = act.targetValue !== undefined ? act.targetValue : act.targetSeconds !== undefined ? act.targetSeconds : act.tgt !== undefined ? act.tgt : 0;
-
-            const effStd = stdLocal * mult;
-            const effTgt = tgtLocal * mult;
-
-            if (isTravel) {
-                travelStd += effStd; travelTgt += effTgt;
-            } else if (!isOverhead) {
-                processStd += effStd; processTgt += effTgt;
-            }
-        });
-
-        if (applyFirstJobInit && initStd === 0) {
-            initStd = getVar(cId, 'Job Overhead').std;
-            initTgt = getVar(cId, 'Job Overhead').tgt;
-
-            if (initStd === 0) {
-                if (cId === sortingCardId) initStd = getVar('job_init', 'Sorting Init').std;
-                if (cId === pickingCardId) initStd = getVar('job_init', 'Picking Init').std;
-                if (cId === packingCardId && flowClass !== 'OBPP') {
-                    initStd = getVar('job_init', 'Packing Init (Std)').std;
-                }
-                initTgt = initStd;
-            }
-        }
-        return { initStd, initTgt, travelStd, travelTgt, processStd, processTgt };
-    };
-
-    if (taskType.includes('sort')) {
-        const sortRes = evaluateCard(sortingCardId, isFirstInActivity);
-        sortingInitStd = sortRes.initStd;
-        sortingProcessStd = sortRes.processStd;
-        prodStd = sortRes.processStd + sortRes.initStd;
-        prodTgt = sortRes.processTgt + sortRes.initTgt;
-    } else if (taskType.includes('pack')) {
-        const packRes = evaluateCard(packingCardId, isFirstTaskInJob);
-        packingInitStd = packRes.initStd;
-        packingProcessStd = packRes.processStd;
-        prodStd = packRes.processStd + packRes.initStd;
-        prodTgt = packRes.processTgt + packRes.initTgt;
-    } else {
-        const pickRes = evaluateCard(pickingCardId, isFirstTaskInJob);
-        pickingInitStd = pickRes.initStd;
-        pickingTravelStd = pickRes.travelStd;
-        pickingProcessStd = pickRes.processStd;
-
-        if (flowClass === 'PUTW' && !hasExplicitPutwallDownstream) {
-            const sortRes = evaluateCard(sortingCardId, isFirstTaskInJob);
-            sortingInitStd = sortRes.initStd;
-            sortingProcessStd = sortRes.processStd;
-
-            const packRes = evaluateCard(packingCardId, isFirstTaskInJob);
-            packingInitStd = packRes.initStd;
-            packingProcessStd = packRes.processStd;
-        }
-
-        prodStd = pickingProcessStd + pickingTravelStd + pickingInitStd + sortingInitStd + sortingProcessStd + packingInitStd + packingProcessStd;
-        prodTgt = prodStd; // Simplified: target equals standard
-    }
-
-    return { pickingInitStd, pickingTravelStd, pickingProcessStd, sortingInitStd, sortingProcessStd, packingInitStd, packingProcessStd, prodStd, prodTgt };
 }

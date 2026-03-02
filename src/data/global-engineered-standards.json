@@ -3,37 +3,66 @@
     {
       "acronym": "OBPP",
       "fullName": "Order Base Pick Pack",
-      "flowClass": "OBPP"
+      "flowClass": "OBPP",
+      "mapping": {
+        "Picking": "picking_obpp",
+        "Packing": "packing_obpp"
+      }
     },
     {
       "acronym": "SIBP",
       "fullName": "Single Item Batch Pick",
-      "flowClass": "SIBP"
+      "flowClass": "SIBP",
+      "mapping": {
+        "Picking": "picking_sibp",
+        "Packing": "packing_sibp"
+      }
     },
     {
       "acronym": "MICP",
       "fullName": "Multi Item Cluster Pick",
-      "flowClass": "MICP"
+      "flowClass": "MICP",
+      "mapping": {
+        "Picking": "picking_micp",
+        "Packing": "packing_micp"
+      }
     },
     {
       "acronym": "IOBP",
       "fullName": "Identical Order Batch Pick",
-      "flowClass": "IOBP"
+      "flowClass": "IOBP",
+      "mapping": {
+        "Picking": "picking_iobp",
+        "Packing": "packing_iobp"
+      }
     },
     {
       "acronym": "SICP",
       "fullName": "Single Item Cluster Pick",
-      "flowClass": "SICP"
+      "flowClass": "SICP",
+      "mapping": {
+        "Picking": "picking_sicp",
+        "Packing": "packing_sicp"
+      }
     },
     {
       "acronym": "PUTW",
       "fullName": "Put Wall Sort",
-      "flowClass": "Put-Wall"
+      "flowClass": "Put-Wall",
+      "mapping": {
+        "Picking": "picking_putwall",
+        "Sorting": "sorting_putwall",
+        "Packing": "packing_putwall"
+      }
     },
     {
       "acronym": "IIBP",
       "fullName": "Identical Item Batch Pick",
-      "flowClass": "IIBP"
+      "flowClass": "IIBP",
+      "mapping": {
+        "Picking": "picking_iibp",
+        "Packing": "packing_iibp"
+      }
     }
   ],
   "cards": [
@@ -47,9 +76,9 @@
           "targetValue": 48
         },
         {
-          "name": "Location Based",
-          "value": 0,
-          "targetValue": 0
+          "name": "Job Overhead",
+          "value": 200,
+          "targetValue": 200
         },
         {
           "name": "SKU Base",

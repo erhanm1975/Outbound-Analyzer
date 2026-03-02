@@ -83,11 +83,12 @@ export function useFileIngestion() {
             append,
             files,
             config: config ? {
-                smoothingTolerance: config.smoothingTolerance,
-                breakThreshold: config.breakThreshold,
-                travelRatio: config.travelRatio,
+                smoothingTolerance: config.globalShiftParams?.smoothingToleranceSec ?? config.smoothingTolerance,
+                breakThreshold: config.globalShiftParams?.breakThresholdSec ?? config.breakThreshold,
+                travelRatio: config.globalShiftParams?.pickingTravelRatio ?? config.travelRatio,
                 engineeredStandards: config.engineeredStandards, // Pass to worker
-                jobTypeMapping: config.jobTypeMapping // NEW
+                jobTypeMapping: config.jobTypeMapping, // NEW
+                columnMapping: config.columnMapping // NEW
             } : undefined
         });
     }, []);
@@ -116,11 +117,12 @@ export function useFileIngestion() {
         workerRef.current.postMessage({
             type: 'REPROCESS',
             config: {
-                smoothingTolerance: config.smoothingTolerance,
-                breakThreshold: config.breakThreshold,
-                travelRatio: config.travelRatio,
+                smoothingTolerance: config.globalShiftParams?.smoothingToleranceSec ?? config.smoothingTolerance,
+                breakThreshold: config.globalShiftParams?.breakThresholdSec ?? config.breakThreshold,
+                travelRatio: config.globalShiftParams?.pickingTravelRatio ?? config.travelRatio,
                 engineeredStandards: config.engineeredStandards, // NEW: Include standards in reprocess
-                jobTypeMapping: config.jobTypeMapping // NEW
+                jobTypeMapping: config.jobTypeMapping, // NEW
+                columnMapping: config.columnMapping // NEW
             }
         });
     }, []);

@@ -395,10 +395,5 @@ export const METRIC_TOOLTIPS = {
             description="Percentage of time spent on active work vs. idle/gap time."
             formula="(Active Time / Shift Span) * 100"
         />
-    ),
-
-    // ACTIVITY MATRIX
-    COL_MATRIX_USER: <RichTooltipContainer title="Active Users" description="Users who had activity during the shift." />,
-    COL_MATRIX_HOUR: <RichTooltipContainer title="Hour Block" description="Activity aggregated by hour of day (00:00 - 23:00)." />,
-    COL_MATRIX_TOTAL: <RichTooltipContainer title="Shift Total" description="Total activity (Tasks or Volume) for the user across the entire shift." />
+    )
 };

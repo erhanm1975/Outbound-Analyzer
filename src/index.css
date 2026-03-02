@@ -5,8 +5,10 @@
 html.dark {
     background-color: #111418;
     color: #ffffff;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 html.dark body {
     background-color: #111418;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }

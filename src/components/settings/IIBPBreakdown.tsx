@@ -1,6 +1,6 @@
 import React from 'react';
 import { HelpCircle } from 'lucide-react';
-import { RichTooltip } from '../rich-tooltip';
+import { RichTooltip } from '../ui/rich-tooltip';
 import type { EngineeredStandardsConfig } from '../../types';
 import { STANDARD_VARIABLE_TYPES } from '../../types';
 

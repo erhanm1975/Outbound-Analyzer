@@ -53,6 +53,7 @@ export interface BufferConfig {
     globalShiftParams?: GlobalShiftParams;
     engineeredStandards?: EngineeredStandardsConfig;
     jobTypeMapping?: Record<string, string>; // Raw JobType -> Standard Flow Acronym
+    columnMapping?: Record<string, string>; // NEW: Mapped Custom Raw Field -> System Field
 }
 
 export interface JobTimingMetrics {
@@ -129,11 +130,53 @@ export interface JobFlowConfig {
     acronym: string;
     fullName: string;
     flowClass: FlowClass;
+    mapping?: {
+        Picking?: string;
+        Sorting?: string;
+        Packing?: string;
+        [key: string]: string | undefined;
+    };
 }
 
 export interface EngineeredStandardsConfig {
     jobFlows: JobFlowConfig[];
     cards: CalculationCard[];
+}
+
+// ----------------------------------------------------------------------
+// NEW: calculation-service.ts Types
+// ----------------------------------------------------------------------
+
+export interface JobObject {
+    jobCode: string;
+    jobType: string;
+    waveCode: string;
+    taskCount: number;
+    totalUnits: number;
+    totalOrders: number;
+    totalLocations: number;
+    totalSKUs: number;
+
+    // Core Engine Results
+    standardSeconds: number;
+    targetSeconds: number;
+    actualSeconds: number;
+
+    pickingStandardSec: number;
+    sortingStandardSec: number;
+    packingStandardSec: number;
+}
+
+export interface WaveObject {
+    waveCode: string;
+    jobCount: number;
+    taskCount: number;
+    totalUnits: number;
+
+    // Core Engine Results
+    standardSeconds: number;
+    targetSeconds: number;
+    actualSeconds: number;
 }
 
 export interface GlobalShiftParams {
@@ -398,6 +441,17 @@ export interface TaskObject {
 
     StandardPackingInitSec?: number;
     StandardPackingProcessSec?: number; // Process Time
+
+    // Granular Targets (New)
+    TargetPickingInitSec?: number;
+    TargetPickingProcessSec?: number;
+    TargetPickingTravelSec?: number;
+
+    TargetSortingInitSec?: number;
+    TargetSortingProcessSec?: number;
+
+    TargetPackingInitSec?: number;
+    TargetPackingProcessSec?: number;
 }
 
 export interface ActivityObject {
@@ -405,6 +459,7 @@ export interface ActivityObject {
     User: string;
     Activity: string; // "Pick|Sort", "No Activity", "Break"
     JobCode: string | null;
+    JobType: string; // "Picking", "Sorting", "Pack", "Break" etc.
     Start: Date;
     Finish: Date;
 
@@ -443,6 +498,15 @@ export interface ActivityObject {
     SortingProcess?: number;
     PackingInit?: number;
     PackingProcess?: number;
+
+    // Granular Targets (Aggregated)
+    TargetPickingInit?: number;
+    TargetPickingProcess?: number;
+    TargetPickingTravel?: number;
+    TargetSortingInit?: number;
+    TargetSortingProcess?: number;
+    TargetPackingInit?: number;
+    TargetPackingProcess?: number;
 }
 
 // ----------------------------------------------------------------------

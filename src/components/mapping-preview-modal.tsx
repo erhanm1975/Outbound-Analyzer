@@ -1,16 +1,45 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { MappingPreviewResult } from '../types';
 import { X, Check, AlertTriangle, FileSpreadsheet, ArrowRight } from 'lucide-react';
 
 interface MappingPreviewModalProps {
     isOpen: boolean;
     results: MappingPreviewResult[] | null;
-    onConfirm: () => void;
+    onConfirm: (mapping: Record<string, string>) => void;
     onCancel: () => void;
     isProcessing: boolean;
 }
 
+const SYSTEM_FIELDS = [
+    'Account', 'Client', 'Warehouse', 'WaveCode', 'JobCode', 'JobType',
+    'AIJobDescription', 'OrderCode', 'TaskType', 'SKU', 'Quantity',
+    'Zone', 'Location', 'User', 'Start', 'Finish', 'IsAI'
+];
+
 export function MappingPreviewModal({ isOpen, results, onConfirm, onCancel, isProcessing }: MappingPreviewModalProps) {
+    const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        if (isOpen && results) {
+            // Initialize from the first file's mappings (assuming they are consistent if multiple, or just take raw headers)
+            // It's better to combine all unique raw headers if there are multiple files
+            const initialMapping: Record<string, string> = {};
+            results.forEach(res => {
+                if (res.mappings) {
+                    res.mappings.forEach(m => {
+                        // Only set if not already set or if previously skipped but now mapped
+                        if (!initialMapping[m.raw] || (!initialMapping[m.raw] && m.mappedTo)) {
+                            initialMapping[m.raw] = m.mappedTo || ''; // empty string means Skip
+                        }
+                    });
+                }
+            });
+            setColumnMapping(initialMapping);
+        } else {
+            setColumnMapping({});
+        }
+    }, [isOpen, results]);
+
     if (!isOpen || !results) return null;
 
     // Calculate stats
@@ -75,22 +104,26 @@ export function MappingPreviewModal({ isOpen, results, onConfirm, onCancel, isPr
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
                                             {result.mappings.map((m, i) => (
-                                                <tr key={i} className={m.mappedTo ? 'bg-emerald-50/10 dark:bg-emerald-900/5' : ''}>
-                                                    <td className={`px-4 py-2.5 font-mono text-xs ${m.mappedTo ? 'text-slate-700 dark:text-slate-300 font-medium' : 'text-slate-400 decoration-slate-300'}`}>
+                                                <tr key={i} className={columnMapping[m.raw] ? 'bg-emerald-50/10 dark:bg-emerald-900/5' : ''}>
+                                                    <td className={`px-4 py-2.5 font-mono text-xs ${columnMapping[m.raw] ? 'text-slate-700 dark:text-slate-300 font-medium' : 'text-slate-400 decoration-slate-300'}`}>
                                                         {m.raw}
                                                     </td>
                                                     <td className="px-4 py-2.5 text-center">
-                                                        <ArrowRight className={`w-3 h-3 ${m.mappedTo ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-700'}`} />
+                                                        <ArrowRight className={`w-3 h-3 ${columnMapping[m.raw] ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-700'}`} />
                                                     </td>
                                                     <td className="px-4 py-2.5">
-                                                        {m.mappedTo ? (
-                                                            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-100/50 dark:bg-emerald-900/20 px-2 py-1 rounded w-fit">
-                                                                <Check className="w-3 h-3" />
-                                                                {m.mappedTo}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-slate-400 italic text-xs">Skipped</span>
-                                                        )}
+                                                        <select
+                                                            value={columnMapping[m.raw] || ''}
+                                                            onChange={(e) => setColumnMapping({ ...columnMapping, [m.raw]: e.target.value })}
+                                                            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2"
+                                                        >
+                                                            <option value="">-- Skip (Do Not Map) --</option>
+                                                            {SYSTEM_FIELDS.map(field => (
+                                                                <option key={field} value={field}>
+                                                                    {field}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -101,9 +134,13 @@ export function MappingPreviewModal({ isOpen, results, onConfirm, onCancel, isPr
 
                             {/* Summary count */}
                             <div className="text-xs text-slate-500 pl-1">
-                                <span className="text-emerald-500 font-medium">{result.mappings.filter(m => m.mappedTo).length} mapped</span>
+                                <span className="text-emerald-500 font-medium">
+                                    {result.mappings.filter(m => columnMapping[m.raw]).length} mapped
+                                </span>
                                 <span className="mx-1">•</span>
-                                <span>{result.mappings.filter(m => !m.mappedTo).length} skipped</span>
+                                <span>
+                                    {result.mappings.filter(m => !columnMapping[m.raw]).length} skipped
+                                </span>
                             </div>
                         </div>
                     ))}
@@ -131,7 +168,7 @@ export function MappingPreviewModal({ isOpen, results, onConfirm, onCancel, isPr
                             Cancel
                         </button>
                         <button
-                            onClick={onConfirm}
+                            onClick={() => onConfirm(columnMapping)}
                             disabled={isProcessing || filesWithErrors === totalFiles}
                             className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium shadow-md transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >

@@ -1,5 +1,5 @@
 import { Box, Activity, Clock, Layers, Info } from 'lucide-react';
-import { RichTooltip } from './rich-tooltip';
+import { RichTooltip } from './ui/rich-tooltip';
 import type { HealthStats } from '../types';
 import { cn } from '../lib/utils';
 import { METRIC_TOOLTIPS } from '../logic/metric-definitions';

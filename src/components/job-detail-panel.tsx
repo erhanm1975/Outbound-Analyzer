@@ -49,7 +49,7 @@ export function JobDetailPanel({ job, tasks, onClose }: JobDetailPanelProps) {
     const otherPct = Math.round((taskTypes.other / totalTaskTime) * 100);
 
     // Gaps Logic
-    const gaps = tasks.filter(t => t.TaskType === 'No Activity' || t.TaskType === 'Break');
+    const gaps = tasks.filter(t => t.TaskType === 'No Activity' || t.TaskType === 'Break' || t.TaskType === 'Implicit Break/Delay' || t.JobType === 'Break');
     const totalGapDuration = gaps.reduce((acc, t) => acc + t.UnproductiveDurationSec, 0);
 
     // Avg Task Duration

@@ -1,4 +1,5 @@
 import { read, utils } from 'xlsx';
+import { APP_CONFIG, DATA_INGESTION } from '../config';
 import { ShiftRecordSchema, type ShiftRecord, type IngestionSummary } from '../types';
 import { processWarehouseLogic } from '../logic/warehouse-transform';
 
@@ -13,6 +14,7 @@ let currentConfig: {
     travelRatio?: number;
     engineeredStandards?: any; // EngineeredStandardsConfig
     jobTypeMapping?: Record<string, string>;
+    columnMapping?: Record<string, string>;
 } = {};
 
 export interface WorkerMessage {
@@ -25,6 +27,7 @@ export interface WorkerMessage {
         travelRatio?: number;
         engineeredStandards?: any;
         jobTypeMapping?: Record<string, string>;
+        columnMapping?: Record<string, string>;
     };
 }
 
@@ -108,21 +111,25 @@ const normalizeRecord = (row: any): Record<string, any> => {
 
     // 1. Map Columns
     Object.keys(row).forEach(key => {
-        // Basic fuzzy match: trim spaces
         const cleanKey = key.trim();
-        const mappedKey = COLUMN_MAP[cleanKey] || COLUMN_MAP[Object.keys(COLUMN_MAP).find(k => k.toLowerCase() === cleanKey.toLowerCase()) || ''];
+        let mappedKey: string | undefined;
+
+        // Priority 1: User-defined Explicit Mapping
+        if (currentConfig.columnMapping && cleanKey in currentConfig.columnMapping) {
+            const userTarget = currentConfig.columnMapping[cleanKey];
+            if (userTarget && userTarget !== '') {
+                mappedKey = userTarget;
+            } else {
+                return; // Explicitly skipped
+            }
+        }
+        // Priority 2: Default Fuzzy Match
+        else {
+            mappedKey = COLUMN_MAP[cleanKey] as string | undefined || (COLUMN_MAP[Object.keys(COLUMN_MAP).find(k => k.toLowerCase() === cleanKey.toLowerCase()) || ''] as string | undefined);
+        }
 
         if (mappedKey) {
-            // Priority Check: Don't overwrite if already set (e.g. Start set by planned, don't overwrite with created)
-            // But iteration order is uncertain. Better to map explicit preference below.
-            // Actually, if we map 'createdDateTime' to 'Start', it might overwrite 'plannedStartDateTime' -> 'Start'.
-            // Simple approach: Map unique keys for intermediate, then consolidate.
-            // But COLUMN_MAP maps directly to Schema keys.
-            // Let's rely on standard map, but special case IsAI.
             normalized[mappedKey] = row[key];
-        } else {
-            // Keep raw for custom logic if needed?
-            // normalized[cleanKey] = row[key]; 
         }
     });
 
@@ -142,8 +149,8 @@ const normalizeRecord = (row: any): Record<string, any> => {
         if (!val) return val;
         // 1. Existing Date object
         if (val instanceof Date) return val;
-        // 2. Excel Serial Number (approximate check > 20000)
-        if (typeof val === 'number' && val > 20000) {
+        // 2. Excel Serial Number (approximate check > EXCEL_SERIAL_DATE_THRESHOLD)
+        if (typeof val === 'number' && val > DATA_INGESTION.EXCEL_SERIAL_DATE_THRESHOLD) {
             // Excel base date logic if needed, but xlsx usually handles this. 
             // If we get raw number here, it might be missed by xlsx.
             // But let's assume it's a timestamp if it's huge, or excel serial if small?
@@ -200,7 +207,7 @@ const normalizeRecord = (row: any): Record<string, any> => {
 };
 
 self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
-    console.log("Worker Processing v3 (Robust Date Parsing)");
+
     try {
         let files: File[] = [];
         let config: { smoothingTolerance?: number; breakThreshold?: number; travelRatio?: number; engineeredStandards?: any } | undefined = undefined;
@@ -489,11 +496,11 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
                             if (!minDate || record.Start < minDate) minDate = record.Start;
                             if (!maxDate || record.Finish > maxDate) maxDate = record.Finish;
 
-                            if (record.Quantity === 0 && warnings.length < 50) {
+                            if (record.Quantity === 0 && warnings.length < APP_CONFIG.limits.MAX_WARNINGS_PER_TYPE) {
                                 warnings.push(`Row ${totalRows} (${file.name}): Quantity is 0`);
                             }
                         } else {
-                            if (errors.length < 10) {
+                            if (errors.length < APP_CONFIG.limits.MAX_ERRORS_PER_TYPE) {
                                 const errorMsg = result.error.issues.map((err: any) => `${err.path}: ${err.message}`).join(', ');
                                 errors.push(`Row ${totalRows} (${file.name}): ${errorMsg}`);
                             }
@@ -641,7 +648,7 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
                             if (!minDate || record.Start < minDate) minDate = record.Start;
                             if (!maxDate || record.Finish > maxDate) maxDate = record.Finish;
 
-                            if (record.Quantity === 0 && warnings.length < 50) {
+                            if (record.Quantity === 0 && warnings.length < APP_CONFIG.limits.MAX_WARNINGS_PER_TYPE) {
                                 warnings.push(`Row ${i + 1} (${file.name}): Quantity is 0`);
                             }
                         } else {
@@ -652,7 +659,7 @@ self.onmessage = async (e: MessageEvent<File | File[] | WorkerMessage>) => {
                                 if (issues.find((issue: any) => issue.path.includes('Quantity'))) isMetadataRow = true;
                             }
 
-                            if (!isMetadataRow && errors.length < 10) {
+                            if (!isMetadataRow && errors.length < APP_CONFIG.limits.MAX_ERRORS_PER_TYPE) {
                                 const errorMsg = result.error.issues.map((err: any) => `${err.path}: ${err.message}`).join(', ');
                                 errors.push(`Row ${i + 1} (${file.name}): ${errorMsg}`);
                             }

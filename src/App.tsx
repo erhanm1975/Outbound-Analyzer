@@ -1,61 +1,70 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Layout } from './components/layout';
-import { FileDropzone } from './components/file-dropzone';
-import { MetricCard } from './components/metric-card';
+import { Layout } from './components/ui/layout';
+import { FileDropzone } from './components/ui/file-dropzone';
+import { MetricCard } from './components/ui/metric-card';
 import { ConfigPanel } from './components/config-panel';
-import { ActivityMatrix } from './components/activity-matrix';
-import { Sidebar } from './components/sidebar';
+import { Sidebar } from './components/ui/sidebar';
 import { ImportSummary } from './components/import-summary';
-import { AnomaliesView } from './components/anomalies-view';
-import { ShiftDetailView } from './components/shift-detail-view';
-import { UserPerformanceView } from './components/user-performance-view';
-import { DynamicFlowView } from './components/dynamic-flow-view';
+import { AnomaliesView } from './components/views/anomalies-view';
+import { ShiftDetailView } from './components/views/shift-detail-view';
+import { UserPerformanceView } from './components/views/user-performance-view';
+import { DynamicFlowView } from './components/views/dynamic-flow-view';
 
-import { ShiftHealthView } from './components/shift-health-view';
-import { ExecutiveReportView } from './components/executive-report-view';
+import { ShiftHealthView } from './components/views/shift-health-view';
+import { ExecutiveReportView } from './components/views/executive-report-view';
 
-
-
-import { JobBreakdownView } from './components/job-breakdown-view';
-import { AdaptationInsightsView } from './components/adaptation-insights-view';
-import { DataHealthView } from './components/data-health-view';
-import { MetricSupportView } from './components/metric-support-view';
-import { AdvancedMetricsView } from './components/advanced-metrics-view';
-import { HeroMetricCard } from './components/hero-metric-card';
+import { AdaptationInsightsView } from './components/views/adaptation-insights-view';
+import { DataHealthView } from './components/views/data-health-view';
+import { MetricSupportView } from './components/views/metric-support-view';
+import { AdvancedMetricsView } from './components/views/advanced-metrics-view';
+import { HeroMetricCard } from './components/ui/hero-metric-card';
 import { WorkloadProfilePanel } from './components/workload-profile-panel';
-import { TaskFlowVisual } from './components/charts/TaskFlowVisual';
-import { JobDetailsView } from './components/job-details-view';
-import { WarehouseLogicView } from './components/warehouse-logic-view';
-import { StandardsImpactView } from './components/standards-impact-view';
+import { TaskFlowVisual } from './components/charts/task-flow-visual';
+import { JobDetailsView } from './components/views/job-details-view';
+import { WarehouseLogicView } from './components/views/warehouse-logic-view';
+import { StandardsImpactView } from './components/views/standards-impact-view';
 import { JobTypeMappingModal } from './components/job-type-mapping-modal';
 import { DashboardSection } from './components/dashboard-section';
 
 import { useFileIngestion } from './hooks';
-import { analyzeShift } from './logic/analysis';
+import { analyzeShift, generateBenchmarkFromStandards } from './logic/analysis';
 import { generateAIContext } from './logic/context-export';
 import { DEFAULT_BUFFER_CONFIG, type BufferConfig, type ShiftRecord, type IngestionSummary, type AnalysisResult } from './types';
 import { METRIC_TOOLTIPS } from './logic/metric-definitions';
 import { Activity, Clock, Box, TrendingUp, AlertTriangle, Settings, ClipboardList } from 'lucide-react';
-import { VelocityView } from './components/velocity-view';
-import { UserGuideView } from './components/user-guide-view';
-import { GlobalHeader } from './components/global-header';
+import { VelocityView } from './components/views/velocity-view';
+import { UserGuideView } from './components/views/user-guide-view';
+import { GlobalHeader } from './components/ui/global-header';
 // ... imports
 import { MappingPreviewModal } from './components/mapping-preview-modal';
-import { GOLAAuditRunner } from './components/gola/GOLAAuditRunner';
+import { GOLAAuditRunner } from './components/gola/gola-audit-runner';
 
 import { useEngineeredStandards } from './hooks/useEngineeredStandards';
+import { ErrorBoundary } from './components/ui/error-boundary';
+import { useGlobalSettings } from './hooks/useGlobalSettings';
 
 function App() {
   const { processFiles, previewFiles, clearPreview, mappingPreview, reprocessLogic, isProcessing, data, taskObjects, activityObjects, summary, error, progress, lastUniqueJobTypes } = useFileIngestion();
 
   const {
-    config,
+    standards: stdStandards,
     updateStandards,
     restoreGlobalDefaults,
     pushCustomizedToGlobal,
     isSaving,
     saveStatus
-  } = useEngineeredStandards(DEFAULT_BUFFER_CONFIG);
+  } = useEngineeredStandards();
+
+  const {
+    settings: globalConfig,
+    updateGlobalSettings
+  } = useGlobalSettings(DEFAULT_BUFFER_CONFIG);
+
+  // Merge them together for the unified pipeline
+  const config = useMemo(() => ({
+    ...globalConfig,
+    engineeredStandards: stdStandards
+  }), [globalConfig, stdStandards]);
 
   const [showSummary, setShowSummary] = useState(false);
   const [showJobMapper, setShowJobMapper] = useState(false); // NEW
@@ -83,11 +92,11 @@ function App() {
   const handleJobMappingSave = (mapping: Record<string, string>) => {
     // Update config
     const newConfig = { ...config, jobTypeMapping: mapping };
-    updateStandards(newConfig);
+    updateGlobalSettings(newConfig);
     // Reprocess
     reprocessLogic(newConfig);
   };
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'health' | 'jobs' | 'dictionary' | 'activity' | 'details' | 'anomalies' | 'data-health' | 'metrics' | 'report' | 'users' | 'flow' | 'forensic' | 'timeline' | 'gola-runner' | 'settings' | 'standards' | 'engineered-impact' | 'velocity' | 'guide'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'upload' | 'dictionary' | 'details' | 'anomalies' | 'data-health' | 'metrics' | 'report' | 'users' | 'flow' | 'forensic' | 'timeline' | 'gola-runner' | 'settings' | 'standards' | 'engineered-impact' | 'velocity' | 'guide'>('upload');
 
   // Support View Metric State
   const [detailMetric, setDetailMetric] = useState<string>('Picking UPH (Hourly Average)');
@@ -160,7 +169,11 @@ function App() {
     };
 
     const primaryFileRecords = activeFile ? data.filter(d => d.filename === activeFile) : data;
-    const benchmarkFileRecords = benchmarkFile ? data.filter(d => d.filename === benchmarkFile) : [];
+
+    let benchmarkFileRecords: ShiftRecord[] = [];
+    if (benchmarkFile && benchmarkFile !== '__STANDARD__' && benchmarkFile !== '__TARGET__') {
+      benchmarkFileRecords = data.filter(d => d.filename === benchmarkFile);
+    }
 
     // Extract unique filter options from FULL dataset
     const clients = Array.from(new Set(data.map(d => d.Client || 'Unknown'))).sort();
@@ -204,8 +217,17 @@ function App() {
 
   const secondaryAnalysis = useMemo(() => {
     if (!secondaryFile) return null;
+
+    // Intercept Virtual Benchmarks
+    if (secondaryFile === '__STANDARD__' && primaryAnalysis) {
+      return generateBenchmarkFromStandards(primaryAnalysis, 'standard');
+    }
+    if (secondaryFile === '__TARGET__' && primaryAnalysis) {
+      return generateBenchmarkFromStandards(primaryAnalysis, 'target');
+    }
+
     return analyzeShift(filteredBenchmarkData, config);
-  }, [filteredBenchmarkData, config, secondaryFile]);
+  }, [filteredBenchmarkData, config, secondaryFile, primaryAnalysis]);
 
   // Calculate suggested buffer (median cycle time)
   const suggestedBuffer = useMemo(() => {
@@ -218,23 +240,21 @@ function App() {
   // Auto-populate intraJobBuffer with calculated median cycle time
   useEffect(() => {
     if (primaryAnalysis) {
-      console.log('🔍 Job Timing Metrics:', primaryAnalysis.jobTimingMetrics);
-      console.log('📊 Current config:', config);
-      console.log('💡 Calculated median cycle time:', suggestedBuffer);
+
 
       if (config.isIntraJobBufferAutoCalculated !== false) {
         if (suggestedBuffer > 0 && suggestedBuffer !== config.intraJobBuffer) {
-          console.log('✅ Auto-populating intraJobBuffer with:', suggestedBuffer);
-          updateStandards({
+          // Auto-populating intraJobBuffer
+          updateGlobalSettings({
             ...config,
             intraJobBuffer: suggestedBuffer,
             isIntraJobBufferAutoCalculated: true
           });
         } else {
-          console.log('⚠️ Skipping auto-populate - value:', suggestedBuffer, 'current:', config.intraJobBuffer);
+          // Skipping auto-populate
         }
       } else {
-        console.log('🚫 Auto-calculate disabled (user override)');
+        // Auto-calculate disabled
       }
     }
   }, [suggestedBuffer, config.intraJobBuffer, config.isIntraJobBufferAutoCalculated, primaryAnalysis]);
@@ -254,9 +274,9 @@ function App() {
     previewFiles(files);
   };
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = (columnMapping: Record<string, string>) => {
     if (pendingFiles.length > 0) {
-      processFiles(pendingFiles, config);
+      processFiles(pendingFiles, { ...config, columnMapping });
       setPendingFiles([]); // Clear pending
       // mappingPreview is auto-cleared by hook when process starts
     }
@@ -278,87 +298,87 @@ function App() {
   // ... (rest of effects)
 
   return (
-    <Layout
-      sidebar={
-        <Sidebar
-          currentTab={currentTab}
-          onTabChange={setCurrentTab as any}
+    <ErrorBoundary>
+      <Layout
+        sidebar={
+          <Sidebar
+            currentTab={currentTab}
+            onTabChange={setCurrentTab as any}
+          />
+        }
+      >
+        {/* Modal Logic */}
+        <MappingPreviewModal
+          isOpen={!!mappingPreview}
+          results={mappingPreview}
+          onConfirm={handleConfirmImport}
+          onCancel={handleCancelImport}
+          isProcessing={isProcessing}
         />
-      }
-    >
-      {/* Modal Logic */}
-      <MappingPreviewModal
-        isOpen={!!mappingPreview}
-        results={mappingPreview}
-        onConfirm={handleConfirmImport}
-        onCancel={handleCancelImport}
-        isProcessing={isProcessing}
-      />
 
-      <div className="p-6 space-y-6 w-full h-full flex flex-col relative">
-        {/* Background Blobs (Absolute Positioned) */}
-        <div className="fixed top-0 left-0 w-96 h-96 bg-blue-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse pointer-events-none"></div>
-        <div className="fixed top-1/2 right-0 w-[30rem] h-[30rem] bg-purple-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 translate-x-1/4 -translate-y-1/2 -z-10 pointer-events-none"></div>
-        <div className="fixed bottom-0 left-1/3 w-80 h-80 bg-cyan-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 translate-y-1/3 -z-10 pointer-events-none"></div>
+        <div className="p-6 space-y-6 w-full h-full flex flex-col relative">
+          {/* Background Blobs (Absolute Positioned) */}
+          <div className="fixed top-0 left-0 w-96 h-96 bg-blue-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 -translate-x-1/2 -translate-y-1/2 -z-10 animate-pulse pointer-events-none"></div>
+          <div className="fixed top-1/2 right-0 w-[30rem] h-[30rem] bg-purple-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 translate-x-1/4 -translate-y-1/2 -z-10 pointer-events-none"></div>
+          <div className="fixed bottom-0 left-1/3 w-80 h-80 bg-cyan-900/20 rounded-full mix-blend-normal filter blur-[80px] opacity-40 translate-y-1/3 -z-10 pointer-events-none"></div>
 
-        {/* Header / Error */}
-        {error && (
-          <div className="p-4 bg-rose-950/30 border border-rose-900/50 text-rose-400 rounded-xl flex items-center gap-2 shrink-0">
-            <AlertTriangle className="w-5 h-5" />
-            {error}
-          </div>
-        )}
-
-        {analysisError && (
-          <div className="p-4 bg-rose-950/30 border border-rose-900/50 text-rose-400 rounded-xl flex flex-col gap-2 shrink-0">
-            <div className="flex items-center gap-2 font-bold">
+          {/* Header / Error */}
+          {error && (
+            <div className="p-4 bg-rose-950/30 border border-rose-900/50 text-rose-400 rounded-xl flex items-center gap-2 shrink-0">
               <AlertTriangle className="w-5 h-5" />
-              Critical Analysis Error
+              {error}
             </div>
-            <p className="text-sm text-rose-300">The dataset could not be analyzed. This is likely due to extreme data volume or format issues.</p>
-            <p className="font-mono text-xs bg-black/30 p-2 rounded text-rose-200">{analysisError}</p>
-          </div>
-        )}
-
-        {summary && showSummary && (
-          <ImportSummary summary={summary} onClose={() => setShowSummary(false)} />
-        )}
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col overflow-y-auto min-h-0">
-
-
-
-          {/* Global Header (Only when analysis is ready) */}
-          {primaryAnalysis && (
-            <GlobalHeader
-              title={activeFile || "Job Analyzer"}
-              taskCount={filteredData.length}
-              secondaryTaskCount={filteredBenchmarkData.length > 0 ? filteredBenchmarkData.length : undefined}
-
-              allFiles={filenames}
-              activeFile={activeFile}
-              onFileChange={setActiveFile}
-              benchmarkFile={benchmarkFile}
-              onBenchmarkChange={setBenchmarkFile}
-
-              clients={clients}
-              selectedClient={clientFilter}
-              onClientChange={setClientFilter}
-              onClearData={() => window.location.reload()}
-              isBenchmark={isBenchmark}
-              onExportContext={handleExportContext}
-            />
           )}
 
-          {/* TAB CONTENT */}
+          {analysisError && (
+            <div className="p-4 bg-rose-950/30 border border-rose-900/50 text-rose-400 rounded-xl flex flex-col gap-2 shrink-0">
+              <div className="flex items-center gap-2 font-bold">
+                <AlertTriangle className="w-5 h-5" />
+                Critical Analysis Error
+              </div>
+              <p className="text-sm text-rose-300">The dataset could not be analyzed. This is likely due to extreme data volume or format issues.</p>
+              <p className="font-mono text-xs bg-black/30 p-2 rounded text-rose-200">{analysisError}</p>
+            </div>
+          )}
 
-          {/* DASHBOARD TAB */}
-          {currentTab === 'dashboard' && (
-            <>
-              {(!primaryAnalysis || data.length === 0) ? (
-                // Empty State for Dashboard: Ingestion
-                <div className="max-w-xl mx-auto mt-20">
+          {summary && showSummary && (
+            <ImportSummary summary={summary} onClose={() => setShowSummary(false)} />
+          )}
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col overflow-y-auto min-h-0">
+
+
+
+            {/* Global Header (Only when analysis is ready) */}
+            {primaryAnalysis && (
+              <GlobalHeader
+                title={activeFile || "Job Analyzer"}
+                taskCount={filteredData.length}
+                secondaryTaskCount={filteredBenchmarkData.length > 0 ? filteredBenchmarkData.length : undefined}
+
+                allFiles={filenames}
+                activeFile={activeFile}
+                onFileChange={setActiveFile}
+                benchmarkFile={benchmarkFile}
+                onBenchmarkChange={setBenchmarkFile}
+
+                clients={clients}
+                selectedClient={clientFilter}
+                onClientChange={setClientFilter}
+                onClearData={() => window.location.reload()}
+                isBenchmark={isBenchmark}
+                onExportContext={handleExportContext}
+              />
+            )}
+
+            {/* TAB CONTENT */}
+
+            {/* DATA UPLOAD TAB */}
+            {currentTab === 'upload' && (
+              <div className="space-y-6 flex-1 flex flex-col">
+                {/* Upload component always visible at the top */}
+                <div className="max-w-xl mx-auto mt-8 shrink-0">
                   <div className="text-center mb-8">
                     <h2 className="text-2xl font-bold text-slate-100">Shift Analysis Ingestion</h2>
                     <p className="text-slate-400 mt-2">Upload day log or multiple logs for benchmarking</p>
@@ -376,9 +396,20 @@ function App() {
                     </div>
                   )}
                 </div>
-              ) : (
-                // Dashboard Content
-                activeStats && (
+
+                {/* Health View charts when data is available */}
+                {primaryAnalysis && data.length > 0 && (
+                  <div className="flex-1 mt-8 pt-8 border-t border-slate-800">
+                    <ShiftHealthView analysis={primaryAnalysis} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* DASHBOARD TAB */}
+            {currentTab === 'dashboard' && (
+              <>
+                {primaryAnalysis && activeStats && (
                   <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                     <div className="space-y-8">
@@ -611,277 +642,270 @@ function App() {
 
 
                   </div>
-                )
-              )}
-            </>
-          )}
+                )}
+              </>
+            )}
 
-          {/* SHARED VISUAL EMPTY STATE FOR OTHER TABS */}
-          {currentTab !== 'dashboard' && currentTab !== 'guide' && currentTab !== 'standards' && currentTab !== 'settings' && currentTab !== 'gola-runner' && (!primaryAnalysis || data.length === 0) && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 text-slate-500">
-              <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                <AlertTriangle className="w-8 h-8 text-slate-600" />
+            {/* SHARED VISUAL EMPTY STATE FOR OTHER TABS */}
+            {currentTab !== 'upload' && currentTab !== 'guide' && currentTab !== 'standards' && currentTab !== 'settings' && currentTab !== 'gola-runner' && (!primaryAnalysis || data.length === 0) && (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-12 text-slate-500">
+                <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                  <AlertTriangle className="w-8 h-8 text-slate-600" />
+                </div>
+                <h3 className="text-xl font-medium text-slate-300">No Data Available</h3>
+                <p className="mt-2 max-w-sm mx-auto text-slate-500">
+                  Please upload a shift log file in the Data Upload tab to view the {currentTab.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase())}.
+                </p>
+                <button
+                  onClick={() => setCurrentTab('upload')}
+                  className="mt-6 px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-sm text-sm font-medium"
+                >
+                  Go to Upload
+                </button>
               </div>
-              <h3 className="text-xl font-medium text-slate-300">No Data Available</h3>
-              <p className="mt-2 max-w-sm mx-auto text-slate-500">
-                Please upload a shift log file in the Dashboard tab to view the {currentTab.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase())}.
-              </p>
-              <button
-                onClick={() => setCurrentTab('dashboard')}
-                className="mt-6 px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-sm text-sm font-medium"
-              >
-                Go to Upload
-              </button>
-            </div>
-          )}
+            )}
 
 
-          {/* OTHER TABS CONTENT (Only rendered when data exists) */}
-          {primaryAnalysis && (
-            <>
-              {currentTab === 'health' && (
-                <div className="flex-1">
-                  <ShiftHealthView analysis={primaryAnalysis} />
-                </div>
-              )}
+            {/* OTHER TABS CONTENT (Only rendered when data exists) */}
+            {primaryAnalysis && (
+              <>
+                {currentTab === 'report' && (
+                  <div className="flex-1 overflow-y-auto">
+                    <ExecutiveReportView
+                      analysis={primaryAnalysis}
+                      benchmarkAnalysis={secondaryAnalysis}
+                      benchmarkName={secondaryFile}
+                    />
+                  </div>
+                )}
 
-              {currentTab === 'report' && (
-                <div className="flex-1 overflow-y-auto">
-                  <ExecutiveReportView
-                    analysis={primaryAnalysis}
-                    benchmarkAnalysis={secondaryAnalysis}
-                    benchmarkName={secondaryFile}
-                  />
-                </div>
-              )}
+                {currentTab === 'metrics' && (
+                  <div className="flex-1 overflow-y-auto">
+                    <MetricSupportView
+                      data={primaryAnalysis.records}
+                      metric={detailMetric}
+                      onBack={() => setCurrentTab('dashboard')}
+                      benchmarkData={secondaryAnalysis?.records}
+                      isBenchmark={isBenchmark}
+                      stats={primaryAnalysis}
+                    />
+                  </div>
+                )}
+                {/* GOLA AUDIT RUNNER */}
+                {currentTab === 'gola-runner' && (
+                  <div className="flex-1 overflow-y-auto">
+                    <GOLAAuditRunner
+                      onInjectPayload={handleInjectGolaPayload}
+                      config={config.engineeredStandards}
+                    />
+                  </div>
+                )}
 
-              {currentTab === 'metrics' && (
-                <div className="flex-1 overflow-y-auto">
-                  <MetricSupportView
-                    data={primaryAnalysis.records}
-                    metric={detailMetric}
-                    onBack={() => setCurrentTab('dashboard')}
-                    benchmarkData={secondaryAnalysis?.records}
-                    isBenchmark={isBenchmark}
-                    stats={primaryAnalysis}
-                  />
-                </div>
-              )}
+                {currentTab === 'dictionary' && (
+                  <div className="flex-1 overflow-y-auto">
+                    <AdaptationInsightsView data={primaryAnalysis.records} config={config} />
+                  </div>
+                )}
 
-              {currentTab === 'jobs' && (
-                <div className="flex-1 overflow-hidden">
-                  <JobBreakdownView stats={primaryAnalysis.health.jobCodeStats} />
-                </div>
-              )}
+                {currentTab === 'users' && (
+                  <div className="flex-1">
+                    <UserPerformanceView data={primaryAnalysis.userPerformance} />
+                  </div>
+                )}
 
-              {currentTab === 'dictionary' && (
-                <div className="flex-1 overflow-y-auto">
-                  <AdaptationInsightsView data={primaryAnalysis.records} config={config} />
-                </div>
-              )}
+                {/* FORENSICS TAB REPLACED BY STITCH VIEW */}
 
-              {currentTab === 'activity' && (
-                <div className="h-[600px] overflow-hidden">
-                  <ActivityMatrix
-                    data={primaryAnalysis.records}
-                    benchmarkData={secondaryAnalysis?.records}
-                  />
-                </div>
-              )}
+                {currentTab === 'flow' && primaryAnalysis?.stats.picking.flowDetails && (
+                  <div className="flex-1">
+                    <DynamicFlowView
+                      rawRecords={primaryAnalysis.records}
+                      processes={{
+                        picking: {
+                          data: primaryAnalysis.stats.picking.flowDetails,
+                          score: primaryAnalysis.stats.picking.dynamicIntervalUPH,
+                          avgTaskDuration: primaryAnalysis.stats.picking.avgTaskDuration,
+                        },
+                        sorting: primaryAnalysis.stats.sorting?.flowDetails ? {
+                          data: primaryAnalysis.stats.sorting.flowDetails,
+                          score: primaryAnalysis.stats.sorting.dynamicIntervalUPH,
+                          avgTaskDuration: primaryAnalysis.stats.sorting.avgTaskDuration,
+                        } : undefined,
+                        packing: primaryAnalysis.stats.packing?.flowDetails ? {
+                          data: primaryAnalysis.stats.packing.flowDetails,
+                          score: primaryAnalysis.stats.packing.dynamicIntervalUPH,
+                          avgTaskDuration: primaryAnalysis.stats.packing.avgTaskDuration,
+                        } : undefined,
+                      }}
+                    />
+                  </div>
+                )}
 
-              {currentTab === 'users' && (
-                <div className="flex-1">
-                  <UserPerformanceView data={primaryAnalysis.userPerformance} />
-                </div>
-              )}
+                {currentTab === 'details' && (
+                  <div className="flex-1">
+                    <ShiftDetailView data={primaryAnalysis.records} />
+                  </div>
+                )}
 
-              {/* FORENSICS TAB REPLACED BY STITCH VIEW */}
+                {currentTab === 'anomalies' && (
+                  <div className="flex-1">
+                    <AnomaliesView telemetry={primaryAnalysis.telemetry} />
+                  </div>
+                )}
 
-              {currentTab === 'flow' && primaryAnalysis?.stats.picking.flowDetails && (
-                <div className="flex-1">
-                  <DynamicFlowView
-                    data={primaryAnalysis.stats.picking.flowDetails}
-                    processName="Picking"
-                    score={primaryAnalysis.stats.picking.dynamicIntervalUPH}
-                    avgTaskDuration={primaryAnalysis.stats.picking.avgTaskDuration}
-                  />
-                </div>
-              )}
+                {currentTab === 'data-health' && summary && primaryAnalysis && (
+                  <div className="p-8 max-w-7xl mx-auto">
+                    {(() => {
+                      // Logic to construct a pseudo-summary for the benchmark file
+                      // Since we don't have the original ingestion summary (raw rows, errors) for historical files,
+                      // we reconstruct what we can from the active records.
+                      const benchmarkSummary: IngestionSummary | undefined = isBenchmark ? {
+                        totalRows: filteredBenchmarkData.length, // Approximation: We assume valid rows ~ total rows for benchmark context
+                        validRows: filteredBenchmarkData.length,
+                        errorRows: 0,
+                        dateRange: null,
+                        uniqueUsers: new Set(filteredBenchmarkData.map(d => d.User)).size,
+                        warehouses: [],
+                        clients: [],
+                        errors: [],
+                        warnings: [],
+                        assumptions: []
+                      } : undefined;
 
-              {currentTab === 'details' && (
-                <div className="flex-1">
-                  <ShiftDetailView data={primaryAnalysis.records} />
-                </div>
-              )}
 
-              {currentTab === 'anomalies' && (
-                <div className="flex-1">
-                  <AnomaliesView telemetry={primaryAnalysis.telemetry} />
-                </div>
-              )}
 
-              {currentTab === 'data-health' && summary && primaryAnalysis && (
-                <div className="p-8 max-w-7xl mx-auto">
-                  {(() => {
-                    // Logic to construct a pseudo-summary for the benchmark file
-                    // Since we don't have the original ingestion summary (raw rows, errors) for historical files,
-                    // we reconstruct what we can from the active records.
-                    const benchmarkSummary: IngestionSummary | undefined = isBenchmark ? {
-                      totalRows: filteredBenchmarkData.length, // Approximation: We assume valid rows ~ total rows for benchmark context
-                      validRows: filteredBenchmarkData.length,
-                      errorRows: 0,
-                      dateRange: null,
-                      uniqueUsers: new Set(filteredBenchmarkData.map(d => d.User)).size,
-                      warehouses: [],
-                      clients: [],
-                      errors: [],
-                      warnings: [],
-                      assumptions: []
-                    } : undefined;
+                      return (
+                        <DataHealthView
+                          summary={summary}
+                          diagnostics={primaryAnalysis.roleDiagnostics}
+                          benchmarkSummary={benchmarkSummary}
+                          benchmarkDiagnostics={isBenchmark && secondaryAnalysis ? secondaryAnalysis.roleDiagnostics : undefined}
+                        />
+                      );
+                    })()}
+                  </div>
+                )}
+                {/* FORENSIC STITCH VIEW */}
+                {currentTab === 'forensic' && (
+                  <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-black/20">
+                    <WarehouseLogicView
+                      tasks={taskObjects}
+                      activities={activityObjects}
+                      config={config}
+                    />
+                  </div>
+                )}
 
-                    console.log('🚀 Input Validation Debug:', {
-                      isBenchmark,
-                      primaryFile,
-                      secondaryFile,
-                      benchmarkFile,
-                      filteredBenchmarkDataLength: filteredBenchmarkData.length,
-                      benchmarkSummary,
-                      hasPrimaryAnalysis: !!primaryAnalysis,
-                      hasSecondaryAnalysis: !!secondaryAnalysis
-                    });
+                {/* TIMELINE AUDIT STITCH VIEW */}
+                {currentTab === 'timeline' && (
+                  <div className="flex-1 overflow-y-auto">
+                    <JobDetailsView
+                      data={primaryAnalysis.records}
+                      config={config}
+                    />
+                  </div>
+                )}
 
-                    return (
-                      <DataHealthView
-                        summary={summary}
-                        diagnostics={primaryAnalysis.roleDiagnostics}
-                        benchmarkSummary={benchmarkSummary}
-                        benchmarkDiagnostics={isBenchmark && secondaryAnalysis ? secondaryAnalysis.roleDiagnostics : undefined}
-                      />
-                    );
-                  })()}
-                </div>
-              )}
-              {/* FORENSIC STITCH VIEW */}
-              {currentTab === 'forensic' && (
-                <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-black/20">
-                  <WarehouseLogicView
-                    tasks={taskObjects}
-                    activities={activityObjects}
+                {currentTab === 'engineered-impact' && (
+                  <div className="flex-1 overflow-hidden">
+                    <StandardsImpactView
+                      tasks={taskObjects.filter(t => !primaryFile || t.filename === primaryFile)}
+                      benchmarkTasks={secondaryFile ? taskObjects.filter(t => t.filename === secondaryFile) : []}
+                      config={config.engineeredStandards}
+                    />
+                  </div>
+                )}
+
+                {currentTab === 'velocity' && (
+                  <div className="flex-1 overflow-y-auto">
+                    <VelocityView
+                      analysis={primaryAnalysis}
+                      benchmark={secondaryAnalysis || undefined}
+                      isLive={false}
+                    />
+                  </div>
+                )}
+
+              </>
+            )}
+
+            {/* SETTINGS & STANDARDS - Always accessible, no data import required */}
+            {currentTab === 'settings' && (
+              <div className="p-8 max-w-4xl mx-auto w-full">
+                <div className="bg-white dark:bg-[#111418] border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-6">
+                  <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-800">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Settings className="w-6 h-6 text-blue-600" />
+                      Global Settings
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+                      Adjust global shift parameters, job separation buffers, and legacy configurations.
+                    </p>
+                  </div>
+                  <ConfigPanel
                     config={config}
+                    onChange={updateGlobalSettings}
+                    suggestedBuffer={suggestedBuffer}
+                    visibleSections={['global', 'legacy']}
+                    onRestoreGlobal={restoreGlobalDefaults}
+                    onPushGlobal={pushCustomizedToGlobal}
+                    isSaving={isSaving}
+                    saveStatus={saveStatus}
                   />
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* TIMELINE AUDIT STITCH VIEW */}
-              {currentTab === 'timeline' && (
-                <div className="flex-1 overflow-y-auto">
-                  <JobDetailsView
-                    data={primaryAnalysis.records}
+            {currentTab === 'standards' && (
+              <div className="p-8 max-w-4xl mx-auto w-full">
+                <div className="bg-white dark:bg-[#111418] border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-6">
+                  <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-800">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <ClipboardList className="w-6 h-6 text-blue-600" />
+                      Engineered Labor Standards
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+                      Configure job workflow maps, engineered standards, and calculation groups.
+                    </p>
+                  </div>
+                  <ConfigPanel
                     config={config}
+                    onChange={updateStandards}
+                    suggestedBuffer={suggestedBuffer}
+                    visibleSections={['workflow', 'standards']}
+                    onRestoreGlobal={restoreGlobalDefaults}
+                    onPushGlobal={pushCustomizedToGlobal}
+                    isSaving={isSaving}
+                    saveStatus={saveStatus}
                   />
                 </div>
-              )}
-
-              {currentTab === 'engineered-impact' && (
-                <div className="flex-1 overflow-hidden">
-                  <StandardsImpactView
-                    tasks={taskObjects.filter(t => !primaryFile || t.filename === primaryFile)}
-                    benchmarkTasks={secondaryFile ? taskObjects.filter(t => t.filename === secondaryFile) : []}
-                    config={config.engineeredStandards}
-                  />
-                </div>
-              )}
-
-              {currentTab === 'velocity' && (
-                <div className="flex-1 overflow-y-auto">
-                  <VelocityView
-                    analysis={primaryAnalysis}
-                    benchmark={secondaryAnalysis || undefined}
-                    isLive={false}
-                  />
-                </div>
-              )}
-
-            </>
-          )}
-
-          {/* SETTINGS & STANDARDS - Always accessible, no data import required */}
-          {currentTab === 'settings' && (
-            <div className="p-8 max-w-4xl mx-auto w-full">
-              <div className="bg-white dark:bg-[#111418] border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-6">
-                <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-800">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Settings className="w-6 h-6 text-blue-600" />
-                    Global Settings
-                  </h2>
-                  <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-                    Adjust global shift parameters, job separation buffers, and legacy configurations.
-                  </p>
-                </div>
-                <ConfigPanel
-                  config={config}
-                  onChange={updateStandards}
-                  suggestedBuffer={suggestedBuffer}
-                  visibleSections={['global', 'legacy']}
-                  onRestoreGlobal={restoreGlobalDefaults}
-                  onPushGlobal={pushCustomizedToGlobal}
-                  isSaving={isSaving}
-                  saveStatus={saveStatus}
-                />
               </div>
-            </div>
-          )}
+            )}
 
-          {currentTab === 'standards' && (
-            <div className="p-8 max-w-4xl mx-auto w-full">
-              <div className="bg-white dark:bg-[#111418] border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-6">
-                <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-800">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <ClipboardList className="w-6 h-6 text-blue-600" />
-                    Engineered Labor Standards
-                  </h2>
-                  <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-                    Configure job workflow maps, engineered standards, and calculation groups.
-                  </p>
-                </div>
-                <ConfigPanel
-                  config={config}
-                  onChange={updateStandards}
-                  suggestedBuffer={suggestedBuffer}
-                  visibleSections={['workflow', 'standards']}
-                  onRestoreGlobal={restoreGlobalDefaults}
-                  onPushGlobal={pushCustomizedToGlobal}
-                  isSaving={isSaving}
-                  saveStatus={saveStatus}
-                />
+            {currentTab === 'guide' && (
+              <div className="flex-1 overflow-y-auto">
+                <UserGuideView />
               </div>
-            </div>
-          )}
+            )}
 
-          {currentTab === 'guide' && (
-            <div className="flex-1 overflow-y-auto">
-              <UserGuideView />
-            </div>
-          )}
+            {currentTab === 'gola-runner' && (
+              <GOLAAuditRunner onInjectPayload={handleInjectGolaPayload} config={config.engineeredStandards} />
+            )}
 
-          {currentTab === 'gola-runner' && (
-            <GOLAAuditRunner onInjectPayload={handleInjectGolaPayload} />
-          )}
-
+          </div>
         </div>
-      </div>
 
-      {/* Job Type Mapper Modal */}
-      <JobTypeMappingModal
-        isOpen={showJobMapper}
-        onClose={() => setShowJobMapper(false)}
-        uniqueJobTypes={lastUniqueJobTypes || []}
-        config={config.engineeredStandards || DEFAULT_BUFFER_CONFIG.engineeredStandards!}
-        existingMapping={config.jobTypeMapping || {}}
-        onSave={handleJobMappingSave}
-      />
+        {/* Job Type Mapper Modal */}
+        <JobTypeMappingModal
+          isOpen={showJobMapper}
+          onClose={() => setShowJobMapper(false)}
+          uniqueJobTypes={lastUniqueJobTypes || []}
+          config={config.engineeredStandards || DEFAULT_BUFFER_CONFIG.engineeredStandards!}
+          existingMapping={config.jobTypeMapping || {}}
+          onSave={handleJobMappingSave}
+        />
 
-    </Layout>
+      </Layout >
+    </ErrorBoundary >
   );
 }
 
