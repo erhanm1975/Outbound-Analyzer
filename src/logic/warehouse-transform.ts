@@ -43,7 +43,12 @@ export function processWarehouseLogic(records: ShiftRecord[], config: Config = {
             }
 
             const rawJobType = record.JobType || 'Unknown';
-            const mappedJobType = config.jobTypeMapping?.[rawJobType] || rawJobType;
+            let mappedJobType = config.jobTypeMapping?.[rawJobType] || rawJobType;
+
+            // Hardcoded override: anything containing "Singles" is considered Single Item Batch Pick
+            if (rawJobType.toLowerCase().includes('singles')) {
+                mappedJobType = 'Single Item Batch Pick';
+            }
 
             taskObjects.push({
                 User: record.User,

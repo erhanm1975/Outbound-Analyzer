@@ -1,5 +1,6 @@
 import { read, utils } from 'xlsx';
-import { APP_CONFIG, DATA_INGESTION } from '../config';
+import { APP_CONFIG } from '../config/app-config';
+import { DATA_INGESTION } from '../config/constants';
 import { ShiftRecordSchema, type ShiftRecord, type IngestionSummary } from '../types';
 import { processWarehouseLogic } from '../logic/warehouse-transform';
 
@@ -103,7 +104,23 @@ const COLUMN_MAP: Record<string, keyof ShiftRecord> = {
     'aiJobTypeDescription': 'AIJobDescription',
     'createdDateTime': 'Start', // Fallback if planned missing, or logic below will handle precedence
     'productName': 'AIJobDescription', // Fallback description?
-    // 'code'? 'warehouseTaskTypeId'? - Unmapped
+
+    // Snowflake Explicit Mappings (User-Approved, resolved via JOINs)
+    'WAVENO': 'WaveCode',
+    'AIJOBTYPEDESCRIPTION': 'AIJobDescription',
+    'TaskTypeName': 'TaskType',
+    'FROMTASKUOMQUANTITY': 'Quantity',
+    'UserEmail': 'User',
+    'ACTUALSTARTDATETIME': 'Start',
+    'ACTUALFINISHDATETIME': 'Finish',
+    // Resolved display names from JOINs
+    'AccountName': 'Account',
+    'ClientName': 'Client',
+    'WarehouseJobTypeName': 'JobType',
+    'WarehouseJobCode': 'JobCode',
+    'WarehouseName': 'Warehouse',
+    'LocationCode': 'Location',
+    'OrderCode': 'OrderCode',
 };
 
 const normalizeRecord = (row: any): Record<string, any> => {

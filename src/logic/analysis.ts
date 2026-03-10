@@ -3,11 +3,8 @@ import {
     type ShiftRecord,
     type BufferConfig,
     type EnrichedShiftRecord,
-    type AggregatedStats,
-    type HealthStats,
     type TelemetryLog,
     type JobTimingMetrics,
-    type AdvancedMetrics, // NEW
     type AnalysisResult
 } from '../types';
 import { APP_CONFIG } from '../config/app-config';
@@ -24,8 +21,9 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
     const telemetry: TelemetryLog[] = [];
 
     let totalVolume = 0;
+    let pickingVolume = 0; // Only picking tasks — used for health metrics (order density, total units)
     let totalDirectTimeSec = 0;
-    let totalAllowedBufferMin = 0;
+    const totalAllowedBufferMin = 0;
     let totalLostTimeMin = 0;
     let totalTasks = 0;
 
@@ -259,6 +257,7 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
 
         totalDirectTimeSec += taskDurationSec; // Still track total active execution
         totalVolume += current.Quantity;
+        if (isPicking) pickingVolume += current.Quantity; // Picking-only volume for health metrics
         totalTasks++;
 
         // For backward compatibility/anomaly logic with buffers (keeping original 'netGap' logic loosely)
@@ -459,7 +458,7 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
 
         return {
             uph: Number(vFloorUph.toFixed(2)), // Keep backward compat (Floor UPH)
-            floorUPH: Number(vFloorUph.toFixed(2)), // NEW
+            floorUPH: Number(vUphPure.toFixed(2)), // FIX: Map to pure task execution speed
             productiveUPH: Number(vProductiveUph.toFixed(2)), // NEW
             uphPure: Number(vUphPure.toFixed(2)),
             uphHourlyFlow: Number(vFlow.toFixed(2)),
@@ -483,11 +482,11 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
     const globalStats = calculateProcessStats(enriched);
 
     // Calculate Picking (Using Enriched)
-    const pickingData = enriched.filter(d => (d.TaskType || '').toLowerCase().includes('picking'));
+    const pickingData = enriched.filter(d => (d.TaskType || '').toLowerCase().includes('pick'));
 
     // Helper: Dynamic Interval UPH (Configurable buckets)
-    const calculateDynamicIntervalUPH = (subset: ShiftRecord[]): { score: number, details: import('../types').FlowDetailData } => {
-        if (subset.length === 0) return { score: 0, details: { intervals: [], allUsers: [] } };
+    const calculateDynamicIntervalUPH = (subset: ShiftRecord[]): { score: number, shiftAvgFlowUPH: number, details: import('../types').FlowDetailData } => {
+        if (subset.length === 0) return { score: 0, shiftAvgFlowUPH: 0, details: { intervals: [], allUsers: [] } };
 
         // 1. Find Range
         // 1. Find Range (Iterative to avoid Stack Overflow)
@@ -506,7 +505,7 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
         }
 
         // 2. Create Buckets
-        const intervalMin = config.flowBucketInterval || 30;
+        const intervalMin = 15; // Fixed requested 15 minute intervals
         const bucketSizeMs = intervalMin * 60 * 1000;
         const buckets: Record<number, { volume: number, users: Set<string>, userVols: Record<string, number> }> = {};
 
@@ -643,11 +642,35 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
                 : 0;
         }
 
+        // Calculate Shift Average Flow UPH exactly as the Flow Audit screen does
+        const allUsersArr = Array.from(distinctUsers).sort();
+        const userTotals = allUsersArr.map(user => {
+            let total = 0;
+            let activeIntervals = 0;
+            intervals.forEach(interval => {
+                const v = interval.users[user];
+                if (v !== undefined) {
+                    total += v;
+                    activeIntervals++;
+                }
+            });
+            const avgFlowUPH = activeIntervals > 0
+                ? Math.round((total / activeIntervals) * multiplier)
+                : 0;
+            return { user, avgFlowUPH, activeIntervals };
+        });
+
+        const activeUsersCount = userTotals.filter(u => u.activeIntervals > 0);
+        const shiftAvgFlowUPH = activeUsersCount.length > 0
+            ? Math.round(activeUsersCount.reduce((acc, u) => acc + u.avgFlowUPH, 0) / activeUsersCount.length)
+            : 0;
+
         return {
             score: Number(finalScore.toFixed(2)),
+            shiftAvgFlowUPH,
             details: {
                 intervals,
-                allUsers: Array.from(distinctUsers).sort()
+                allUsers: allUsersArr
             }
         };
     };
@@ -656,14 +679,16 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
     const pickingStats = {
         ...calculateProcessStats(pickingData),
         dynamicIntervalUPH: pickingFlow.score,
+        shiftAvgFlowUPH: pickingFlow.shiftAvgFlowUPH,
         flowDetails: pickingFlow.details // NEW
     };
 
-    const packingData = enriched.filter(d => (d.TaskType || '').toLowerCase().includes('packing'));
+    const packingData = enriched.filter(d => (d.TaskType || '').toLowerCase().includes('pack'));
     const packingFlow = calculateDynamicIntervalUPH(packingData);
     const packingStats = {
         ...calculateProcessStats(packingData),
         dynamicIntervalUPH: packingFlow.score,
+        shiftAvgFlowUPH: packingFlow.shiftAvgFlowUPH,
         flowDetails: packingFlow.details // NEW
     };
 
@@ -673,6 +698,7 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
     const sortingStats = {
         ...calculateProcessStats(sortingData),
         dynamicIntervalUPH: sortingFlow.score,
+        shiftAvgFlowUPH: sortingFlow.shiftAvgFlowUPH,
         flowDetails: sortingFlow.details
     };
 
@@ -681,27 +707,131 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
 
     // --- Health Calculations ---
 
-    // 1. Order Stats
-    // 1. Order Stats
-    // STRICT RULE: Only consider "Picking" tasks for Single/Multi item calculation.
-    // Packing tasks are redundant for this specific metric.
-    const ordersMap = new Map<string, number>(); // OrderCode -> Total Quantity
+    // 1. Order Stats — STRICTLY count ONLY picking tasks (pack/sort dropped entirely)
+    // Track both Quantity (Units) and distinct SKUs for the Heatmap
+    const ordersMap = new Map<string, { qty: number; skus: Map<string, number> }>();
     data.forEach(d => {
         const taskType = (d.TaskType || '').toLowerCase();
-        if (taskType.includes('picking')) {
-            const currentQty = ordersMap.get(d.OrderCode) || 0;
-            ordersMap.set(d.OrderCode, currentQty + d.Quantity);
+        const isPicking = taskType.includes('pick') || taskType.includes('replen') || taskType.includes('put');
+        if (!isPicking) return; // Drop everything else
+
+        const orderData = ordersMap.get(d.OrderCode) || { qty: 0, skus: new Map<string, number>() };
+        orderData.qty += d.Quantity;
+        if (d.SKU) {
+            const currentQty = orderData.skus.get(d.SKU) || 0;
+            orderData.skus.set(d.SKU, currentQty + d.Quantity);
         }
+        ordersMap.set(d.OrderCode, orderData);
     });
 
     const totalOrders = ordersMap.size;
     let singleItemOrders = 0;
     let multiItemOrders = 0;
 
-    ordersMap.forEach(qty => {
+    // NEW: Order Size Distribution
+    const distributionBuckets: Record<string, { count: number; sortIndex: number }> = {
+        '1': { count: 0, sortIndex: 1 },
+        '2': { count: 0, sortIndex: 2 },
+        '3': { count: 0, sortIndex: 3 },
+        '4': { count: 0, sortIndex: 4 },
+        '5': { count: 0, sortIndex: 5 },
+        '6-10': { count: 0, sortIndex: 6 },
+        '11-20': { count: 0, sortIndex: 7 },
+        '21-50': { count: 0, sortIndex: 8 },
+        '51+': { count: 0, sortIndex: 9 }
+    };
+
+    // NEW: Order Profile Heatmap Matrix
+    const xLabels = ['1', '2', '3-5', '6-10', '11-20', '21+']; // Units (Order Depth)
+    const yLabels = ['1', '2', '3-5', '6-10', '11-20', '21+']; // SKUs (Order Width)
+    // Initialize 2D array: matrix[skuBucket][unitBucket]
+    const matrix: number[][] = Array(6).fill(0).map(() => Array(6).fill(0));
+    let heatmapMaxCount = 0;
+
+    const getBucketIndex = (val: number): number => {
+        if (val === 1) return 0;
+        if (val === 2) return 1;
+        if (val >= 3 && val <= 5) return 2;
+        if (val >= 6 && val <= 10) return 3;
+        if (val >= 11 && val <= 20) return 4;
+        return 5;
+    };
+
+    // NEW: Identical Orders Tracking
+    const signatureCounts = new Map<string, { count: number; isSingleItem: boolean }>();
+
+    ordersMap.forEach(({ qty, skus }) => {
         if (qty === 1) singleItemOrders++;
         else multiItemOrders++;
+
+        // 1D Distribution bucketing (Bar Chart)
+        if (qty === 1) distributionBuckets['1'].count++;
+        else if (qty === 2) distributionBuckets['2'].count++;
+        else if (qty === 3) distributionBuckets['3'].count++;
+        else if (qty === 4) distributionBuckets['4'].count++;
+        else if (qty === 5) distributionBuckets['5'].count++;
+        else if (qty >= 6 && qty <= 10) distributionBuckets['6-10'].count++;
+        else if (qty >= 11 && qty <= 20) distributionBuckets['11-20'].count++;
+        else if (qty >= 21 && qty <= 50) distributionBuckets['21-50'].count++;
+        else distributionBuckets['51+'].count++;
+
+        // 2D Profile Heatmap bucketing
+        const skuCount = skus.size > 0 ? skus.size : 1; // Default to 1 if no SKU logged but volume exists
+        const unitIdx = getBucketIndex(qty);
+        const skuIdx = getBucketIndex(skuCount);
+
+        matrix[skuIdx][unitIdx]++;
+        if (matrix[skuIdx][unitIdx] > heatmapMaxCount) {
+            heatmapMaxCount = matrix[skuIdx][unitIdx];
+        }
+
+        // Signature Generation for Identical Orders
+        if (skus.size > 0) {
+            // Sort SKUs to ensure consistent signature regardless of scan order
+            const sortedSkus = Array.from(skus.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+            // e.g. "SKU_A:2|SKU_B:1"
+            const signature = sortedSkus.map(([sku, q]) => `${sku}:${q}`).join(' | ');
+
+            const isSingleItem = skus.size === 1;
+            const existing = signatureCounts.get(signature) || { count: 0, isSingleItem };
+            existing.count++;
+
+            signatureCounts.set(signature, existing);
+        }
     });
+
+    const identicalItemOrders: { id: string; count: number }[] = [];
+    const identicalOrders: { id: string; count: number }[] = [];
+
+    signatureCounts.forEach((data, signature) => {
+        if (data.count > 1) {
+            if (data.isSingleItem) {
+                // Formatting signature for readability if it's just one SKU
+                const formattedId = signature.replace(':', ' (Qty: ') + ')';
+                identicalItemOrders.push({ id: formattedId, count: data.count });
+            } else {
+                identicalOrders.push({ id: signature, count: data.count });
+            }
+        }
+    });
+
+    // Sort descending by count
+    identicalItemOrders.sort((a, b) => b.count - a.count);
+    identicalOrders.sort((a, b) => b.count - a.count);
+
+    // Convert to array for chart
+    const orderSizeDistribution = Object.entries(distributionBuckets)
+        .map(([sizeLabel, data]) => ({ sizeLabel, count: data.count, sortIndex: data.sortIndex }))
+        // Filter out empty buckets for cleaner charts
+        .filter(b => b.count > 0)
+        .sort((a, b) => a.sortIndex - b.sortIndex);
+
+    const orderProfileMatrix = {
+        xLabels,
+        yLabels,
+        matrix,
+        maxCount: heatmapMaxCount
+    };
 
     // 2. Resource Segmentation & 3. Durations
     // 2. Resource Segmentation & 3. Durations
@@ -713,16 +843,12 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
     const pickerDebug = new Map<string, string>();
     const packerDebug = new Map<string, string>();
 
-    let totalPickDuration = 0;
-    let pickTaskCount = 0;
     let totalPackDuration = 0;
     let packTaskCount = 0;
 
     // 4. Transitions
     let totalJobTransitionTime = 0;
     let jobTransitionCount = 0;
-    let totalGapTime = 0;
-    let gapCount = 0;
 
     enriched.forEach(r => {
         // const jobType = (r.JobType || '').toLowerCase(); // Unused
@@ -732,7 +858,7 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
         allEmployees.add(r.User);
 
         // Strict User Rule: Only TaskType determines Picking/Packing
-        const isPick = taskType === 'picking';
+        const isPick = taskType.includes('pick');
         const isPack = taskType === 'packing';
 
         if (isPick) {
@@ -740,8 +866,6 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
             if (!pickerDebug.has(r.User)) {
                 pickerDebug.set(r.User, `TaskType: ${r.TaskType}`);
             }
-            totalPickDuration += Math.max(0, differenceInSeconds(r.Finish, r.Start));
-            pickTaskCount++;
         }
 
         if (isPack) {
@@ -757,12 +881,6 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
         if (r.gapType === 'TRANSITION') {
             totalJobTransitionTime += r.rawGap;
             jobTransitionCount++;
-        }
-
-        // Travel Proxy (All valid gaps > 0)
-        if (r.rawGap > 0 && r.gapType !== 'OVERLAP') {
-            totalGapTime += (r.rawGap * 60); // seconds
-            gapCount++;
         }
     });
 
@@ -782,6 +900,19 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
         const directSec = userRecords.reduce((sum, d) => sum + Math.max(0, differenceInSeconds(d.Finish, d.Start)), 0);
         const directHours = directSec / 3600;
 
+        // Process-specific UPH calculation
+        const pickRecords = userRecords.filter(d => (d.TaskType || '').toLowerCase().includes('pick'));
+        const packRecords = userRecords.filter(d => (d.TaskType || '').toLowerCase().includes('pack'));
+
+        const pickVol = pickRecords.reduce((sum, d) => sum + d.Quantity, 0);
+        const packVol = packRecords.reduce((sum, d) => sum + d.Quantity, 0);
+
+        const pickDirectHours = pickRecords.reduce((sum, d) => sum + Math.max(0, differenceInSeconds(d.Finish, d.Start)), 0) / 3600;
+        const packDirectHours = packRecords.reduce((sum, d) => sum + Math.max(0, differenceInSeconds(d.Finish, d.Start)), 0) / 3600;
+
+        const pickingUph = pickDirectHours > 0 ? pickVol / pickDirectHours : 0;
+        const packingUph = packDirectHours > 0 ? packVol / packDirectHours : 0;
+
         // UPH (Occupancy) = Volume / Span Hours
         const uph = spanHours > 0 ? vol / spanHours : 0;
         const utilization = spanHours > 0 ? (directHours / spanHours) * 100 : 0;
@@ -792,6 +923,8 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
             totalVolume: vol,
             totalShiftSpan: Number(spanHours.toFixed(2)),
             directTime: Number(directHours.toFixed(2)),
+            pickingUph: Number(pickingUph.toFixed(2)),
+            packingUph: Number(packingUph.toFixed(2)),
             utilization: Number(utilization.toFixed(2)),
             rank: 0 // set after sort
         };
@@ -809,6 +942,7 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
             productiveUPH: globalStats.productiveUPH, // NEW
             floorUPH: globalStats.floorUPH, // NEW
             outputDensity: globalStats.outputDensity, // NEW
+            dynamicIntervalUPH: pickingStats.dynamicIntervalUPH || 0,
             picking: pickingStats,
             sorting: sortingStats, // NEW
             packing: packingStats,
@@ -830,11 +964,15 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
             multiItemOrders,
             uniqueLocsVisited: distinctLocations,
             totalUniqueLocations: physicalLocsSet.size, // NEW
-            totalUnits: totalVolume,
+            totalUnits: pickingVolume, // Use picking-only volume for health metrics
             uniquePickers: pickers.size,
             uniquePackers: packers.size,
             totalDistinctEmployees: allEmployees.size, // NEW
             crossTrainedEmployees: [...pickers].filter(u => packers.has(u)).length, // NEW Intersection
+            orderSizeDistribution, // NEW Chart Data
+            orderProfileMatrix, // NEW Heatmap Data
+            identicalItemOrders, // NEW Identical Item Orders
+            identicalOrders, // NEW Identical Orders
 
             // P10 Baseline Logic for Process vs Travel Separation
             ...(() => {
@@ -842,7 +980,6 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
                 // Re-iterate or use what we captured? We didn't capture individual durations in an array yet, effectively.
                 // Let's rely on the aggregate for avgTotal but we need the ARRAY for P10.
                 // Since we are inside the map loop above, we didn't store them. 
-                // We should probably do a quick filter on the 'subset' instead of re-looping if possible, OR
                 // simpler: just re-iterate subset for this specific stats calculation to keep it clean.
 
                 enriched.forEach(r => {
@@ -895,6 +1032,23 @@ export function analyzeShift(data: ShiftRecord[], config: BufferConfig): Analysi
                     avgTasksPerJob: totalJobs > 0
                         ? Number((totalTasks / totalJobs).toFixed(1))
                         : 0,
+                    // AI vs Manual Extracted Metrics
+                    aiVsManualStats: jobStats.reduce((acc, job) => {
+                        if (job.isAI) {
+                            acc.aiJobs++;
+                            acc.aiOrders += job.totalOrders;
+                            acc.aiUnits += job.totalUnits;
+                        } else {
+                            acc.manualJobs++;
+                            acc.manualOrders += job.totalOrders;
+                            acc.manualUnits += job.totalUnits;
+                        }
+                        return acc;
+                    }, {
+                        aiJobs: 0, manualJobs: 0,
+                        aiOrders: 0, manualOrders: 0,
+                        aiUnits: 0, manualUnits: 0
+                    }),
                     jobCodeStats: jobStats
                 };
             })(),
@@ -1062,12 +1216,20 @@ function calculateJobCodeStats(data: ShiftRecord[]) {
             });
         }
         const entry = map.get(d.JobCode)!;
+
+        // Always track the AI flag if any row has it
+        if (d.IsAI) entry.isAI = true;
+
+        const taskType = (d.TaskType || '').toLowerCase();
+        const isPicking = taskType.includes('pick') || taskType.includes('replen') || taskType.includes('put');
+
+        // STRICT PICKING FILTER
+        if (!isPicking) return;
+
         entry.orders.add(d.OrderCode);
-        entry.locations.add(d.Location); // Assuming 'Location' is unique visit context? Or unique loc string.
+        entry.locations.add(d.Location);
         entry.skus.add(d.SKU);
         entry.units += d.Quantity;
-        // If any record in the job is marked AI, assume the whole job is AI (or correct based on data consistency)
-        if (d.IsAI) entry.isAI = true;
     });
 
     return Array.from(map.entries()).map(([jobCode, stats]) => ({
@@ -1078,7 +1240,7 @@ function calculateJobCodeStats(data: ShiftRecord[]) {
         totalSkus: stats.skus.size,
         totalUnits: stats.units,
         isAI: stats.isAI
-    })).sort((a, b) => b.totalUnits - a.totalUnits); // Default sort desc by volume
+    })).sort((a, b) => b.totalUnits - a.totalUnits);
 }
 
 function calculateJobTypeStats(data: ShiftRecord[]) {
@@ -1174,6 +1336,13 @@ function calculateWaveStats(data: ShiftRecord[]) {
             });
         }
         const job = jobMap.get(d.JobCode)!;
+
+        const taskType = (d.TaskType || '').toLowerCase();
+        const isPicking = taskType.includes('pick') || taskType.includes('replen') || taskType.includes('put');
+
+        // STRICT PICKING FILTER
+        if (!isPicking) return;
+
         job.orderCodes.add(d.OrderCode);
         job.units += d.Quantity;
     });
@@ -1188,9 +1357,7 @@ function calculateWaveStats(data: ShiftRecord[]) {
     jobMap.forEach(job => {
         if (!waveMap.has(job.waveCode)) {
             waveMap.set(job.waveCode, {
-                jobCount: 0,
-                sumOrders: 0,
-                sumUnits: 0
+                jobCount: 0, sumOrders: 0, sumUnits: 0
             });
         }
         const wave = waveMap.get(job.waveCode)!;
@@ -1272,7 +1439,7 @@ function calculateAdvancedMetrics(
         const w = waveStats.get(d.WaveCode)!;
         const type = (d.TaskType || '').toLowerCase();
 
-        if (type.includes('picking')) {
+        if (type.includes('pick')) {
             if (!w.maxPickFinish || d.Finish > w.maxPickFinish) w.maxPickFinish = d.Finish;
         } else if (type.includes('packing')) {
             if (!w.minPackStart || d.Start < w.minPackStart) w.minPackStart = d.Start;
@@ -1366,8 +1533,8 @@ export function generateBenchmarkFromStandards(
         if (stats.totalActiveTime > 0) {
             stats.uph = stats.totalVolume / stats.totalActiveTime;
             stats.tph = stats.totalTasks / stats.totalActiveTime;
-            stats.productiveUPH = stats.totalVolume / (stats.directTime / 60);
-            stats.floorUPH = stats.totalVolume / stats.totalActiveTime;
+            stats.productiveUPH = stats.productiveUPH * (1 / multiplier);
+            stats.floorUPH = stats.totalVolume / (stats.directTime / 60);
             stats.dynamicIntervalUPH = stats.dynamicIntervalUPH * (1 / multiplier);
         }
     };

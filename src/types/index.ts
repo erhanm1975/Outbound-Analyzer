@@ -49,11 +49,13 @@ export interface BufferConfig {
     travelRatio?: number; // default 0.70
     utilizationCap?: number; // default 5 (Top 5)
 
-    // NEW: Engineered Standards Integration
     globalShiftParams?: GlobalShiftParams;
     engineeredStandards?: EngineeredStandardsConfig;
     jobTypeMapping?: Record<string, string>; // Raw JobType -> Standard Flow Acronym
     columnMapping?: Record<string, string>; // NEW: Mapped Custom Raw Field -> System Field
+
+    // Financial Analysis
+    hourlyWage?: number; // default 22
 }
 
 export interface JobTimingMetrics {
@@ -185,6 +187,13 @@ export interface GlobalShiftParams {
     pickingTravelRatio: number; // 0.0 - 1.0
     pickingDirectRatio: number; // 0.0 - 1.0 (Must sum to 1.0 with travel)
     smoothingToleranceSec: number;
+    aiMaturityWeights: {
+        p1: number;
+        p2: number;
+        p3: number;
+        p4: number;
+        p5: number;
+    };
 }
 
 
@@ -200,6 +209,7 @@ export const DEFAULT_BUFFER_CONFIG: BufferConfig = {
     breakThresholdSec: 300, // Added for TransformConfig compatibility
     travelRatio: 0.70,
     utilizationCap: 5,
+    hourlyWage: 22, // NEW Default wage scale for waste analysis
 
     // GLOBAL SHIFT PARAMS (Defaults)
     globalShiftParams: {
@@ -207,7 +217,14 @@ export const DEFAULT_BUFFER_CONFIG: BufferConfig = {
         breakThresholdSec: 300,
         pickingTravelRatio: 0.70,
         pickingDirectRatio: 0.30,
-        smoothingToleranceSec: 2
+        smoothingToleranceSec: 2,
+        aiMaturityWeights: {
+            p1: 0.40,
+            p2: 0.20,
+            p3: 0.15,
+            p4: 0.10,
+            p5: 0.15
+        }
     }
 };
 
@@ -235,22 +252,23 @@ export interface ProcessStats {
     uph: number;
     uphPure: number;
     uphHourlyFlow: number;
-    productiveUPH: number; // NEW 3.1
-    floorUPH: number; // NEW 3.2
-    outputDensity: number; // NEW 3.3
-    dynamicIntervalUPH: number; // NEW: 15-min bucket flow
-    flowDetails?: FlowDetailData; // NEW: Detailed breakdown
+    productiveUPH: number;
+    floorUPH: number;
+    outputDensity: number;
+    dynamicIntervalUPH: number; // Fallback
+    shiftAvgFlowUPH?: number; // Added for new Flow UPH logic
     tph: number;
     utilization: number;
     totalVolume: number;
-    totalActiveTime: number; // hours (Shift Span)
-    directTime: number; // minutes
+    totalActiveTime: number;
+    directTime: number;
     distinctLocations: number;
     totalTasks: number;
     locationsPerUnit: number;
     avgTaskDuration: number;
-    avgProcessTimeSec: number; // NEW
-    avgTravelTimeSec: number; // NEW
+    avgProcessTimeSec: number;
+    avgTravelTimeSec: number;
+    flowDetails?: FlowDetailData;
 }
 
 export interface FlowDetailData {
@@ -275,6 +293,7 @@ export interface AggregatedStats {
     productiveUPH: number; // NEW 3.1
     floorUPH: number; // NEW 3.2
     outputDensity: number; // NEW 3.3
+    dynamicIntervalUPH: number; // NEW Flow UPH
     picking: ProcessStats;
     sorting: ProcessStats;
     packing: ProcessStats;
@@ -296,6 +315,15 @@ export interface AggregatedStats {
     lostTime: number; // minutes
     distinctLocations: number; // Unique Job+Location count
     locationsPerUnit: number; // distinctLocations / totalVolume
+}
+
+export interface AIVsManualStats {
+    aiJobs: number;
+    manualJobs: number;
+    aiOrders: number;
+    manualOrders: number;
+    aiUnits: number;
+    manualUnits: number;
 }
 
 export interface HealthStats {
@@ -322,11 +350,23 @@ export interface HealthStats {
     avgOrdersPerJob: number;
     avgTasksPerJob: number;
 
+    // AI vs Manual Extracted Metrics
+    aiVsManualStats?: AIVsManualStats;
+
     // New Tables Data
     jobCodeStats: JobCodeStats[];
     jobTypeStats: JobTypeStats[];
     taskTypeStats: TaskTypeStats[];
     waveStats: WaveStats[]; // NEW
+    orderSizeDistribution: { sizeLabel: string; count: number; sortIndex: number }[]; // NEW Chart Data
+    orderProfileMatrix?: {
+        xLabels: string[]; // Units
+        yLabels: string[]; // SKUs
+        matrix: number[][]; // [y_index][x_index] -> count
+        maxCount: number; // For scaling colors
+    }; // NEW Heatmap Data
+    identicalItemOrders?: { id: string; count: number }[];
+    identicalOrders?: { id: string; count: number }[];
     taskDurationAudit?: any[]; // For now to avoid strict typing issues, or define proper type
 }
 
@@ -526,7 +566,8 @@ export interface UserPerformanceStats {
     // Usage in analysis.ts
     totalShiftSpan: number;
     directTime: number;
-
+    pickingUph?: number;
+    packingUph?: number;
 }
 
 export interface AnalysisResult {

@@ -3,31 +3,34 @@
  * Centralized dictionary for warehouse job types and process flows.
  */
 
-export enum ProcessFlowType {
-    MICP = 'MICP',
-    IIBP = 'IIBP',
-    IOBP = 'IOBP',
-    SIBP = 'SIBP',
-    SICP = 'SICP',
-    OBPP = 'OBPP',
-    PUT_WALL = 'Put-Wall',
-}
+export const ProcessFlowType = {
+    MICP: 'MICP',
+    IIBP: 'IIBP',
+    IOBP: 'IOBP',
+    SIBP: 'SIBP',
+    SICP: 'SICP',
+    OBPP: 'OBPP',
+    PUT_WALL: 'Put-Wall',
+} as const;
+export type ProcessFlowType = typeof ProcessFlowType[keyof typeof ProcessFlowType];
 
-export enum TaskTypeId {
-    PUT_TO_WALL = 'PUT_TO_WALL',
-    IDENTICAL_ITEM = 'IDENTICAL_ITEM',
-}
+export const TaskTypeId = {
+    PUT_TO_WALL: 'PUT_TO_WALL',
+    IDENTICAL_ITEM: 'IDENTICAL_ITEM',
+} as const;
+export type TaskTypeId = typeof TaskTypeId[keyof typeof TaskTypeId];
 
-export enum AdaptationJobProfile {
-    PUT_TO_WALL = 'PUT_TO_WALL',
-    IDENTICAL_ITEM = 'IDENTICAL_ITEM',
-    MIXED_SINGLES = 'MIXED_SINGLES',
-    IDENTICAL_ORDERS = 'IDENTICAL_ORDERS',
-    ORDER_BASED = 'ORDER_BASED',
-    MULTI_ITEM = 'MULTI_ITEM',
-    COMPLEX = 'COMPLEX',
-    UNKNOWN = 'UNKNOWN',
-}
+export const AdaptationJobProfile = {
+    PUT_TO_WALL: 'PUT_TO_WALL',
+    IDENTICAL_ITEM: 'IDENTICAL_ITEM',
+    MIXED_SINGLES: 'MIXED_SINGLES',
+    IDENTICAL_ORDERS: 'IDENTICAL_ORDERS',
+    ORDER_BASED: 'ORDER_BASED',
+    MULTI_ITEM: 'MULTI_ITEM',
+    COMPLEX: 'COMPLEX',
+    UNKNOWN: 'UNKNOWN',
+} as const;
+export type AdaptationJobProfile = typeof AdaptationJobProfile[keyof typeof AdaptationJobProfile];
 
 /** Maps a ProcessFlowType to its specific HTML ID used for DOM injection/scrolling */
 export const PickingElementIdMap: Record<string, string> = {

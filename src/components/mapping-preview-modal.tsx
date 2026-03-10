@@ -103,30 +103,40 @@ export function MappingPreviewModal({ isOpen, results, onConfirm, onCancel, isPr
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                                            {result.mappings.map((m, i) => (
-                                                <tr key={i} className={columnMapping[m.raw] ? 'bg-emerald-50/10 dark:bg-emerald-900/5' : ''}>
-                                                    <td className={`px-4 py-2.5 font-mono text-xs ${columnMapping[m.raw] ? 'text-slate-700 dark:text-slate-300 font-medium' : 'text-slate-400 decoration-slate-300'}`}>
-                                                        {m.raw}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-center">
-                                                        <ArrowRight className={`w-3 h-3 ${columnMapping[m.raw] ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-700'}`} />
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        <select
-                                                            value={columnMapping[m.raw] || ''}
-                                                            onChange={(e) => setColumnMapping({ ...columnMapping, [m.raw]: e.target.value })}
-                                                            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2"
-                                                        >
-                                                            <option value="">-- Skip (Do Not Map) --</option>
-                                                            {SYSTEM_FIELDS.map(field => (
-                                                                <option key={field} value={field}>
-                                                                    {field}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            {(() => {
+                                                const sortedMappings = [...result.mappings].sort((a, b) => {
+                                                    const aMapped = !!columnMapping[a.raw];
+                                                    const bMapped = !!columnMapping[b.raw];
+                                                    if (aMapped && !bMapped) return -1;
+                                                    if (!aMapped && bMapped) return 1;
+                                                    return a.raw.localeCompare(b.raw);
+                                                });
+
+                                                return sortedMappings.map((m, i) => (
+                                                    <tr key={i} className={columnMapping[m.raw] ? 'bg-emerald-50/10 dark:bg-emerald-900/5' : ''}>
+                                                        <td className={`px-4 py-2.5 font-mono text-xs ${columnMapping[m.raw] ? 'text-slate-700 dark:text-slate-300 font-medium' : 'text-slate-400 decoration-slate-300'}`}>
+                                                            {m.raw}
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-center">
+                                                            <ArrowRight className={`w-3 h-3 ${columnMapping[m.raw] ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-700'}`} />
+                                                        </td>
+                                                        <td className="px-4 py-2.5">
+                                                            <select
+                                                                value={columnMapping[m.raw] || ''}
+                                                                onChange={(e) => setColumnMapping({ ...columnMapping, [m.raw]: e.target.value })}
+                                                                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2"
+                                                            >
+                                                                <option value="">-- Skip (Do Not Map) --</option>
+                                                                {SYSTEM_FIELDS.map(field => (
+                                                                    <option key={field} value={field}>
+                                                                        {field}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })()}
                                         </tbody>
                                     </table>
                                 </div>

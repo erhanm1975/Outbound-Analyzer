@@ -37,12 +37,12 @@ export const NAVIGATION_ITEMS: NavItem[] = [
         label: 'Dashboard',
         icon: PieChart,
         children: [
+            { id: 'data-health', label: 'DataSet Diagnostics', icon: Activity },
             { id: 'velocity', label: 'Velocity Dashboard', icon: Activity },
-            { id: 'dashboard', label: 'Detail Dashboard', icon: PieChart },
             { id: 'dictionary', label: 'Adaptation Insights', icon: BookOpen },
             { id: 'engineered-impact', label: 'Happy Path Analysis', icon: ClipboardList },
             { id: 'users', label: 'Employees', icon: Users },
-            { id: 'report', label: 'Reports', icon: FileBarChart },
+            { id: 'report', label: 'Executive Brief', icon: FileBarChart },
         ]
     },
     {
@@ -66,6 +66,7 @@ export const NAVIGATION_ITEMS: NavItem[] = [
             { id: 'upload', label: 'Data Upload', icon: UploadCloud },
             { id: 'gola-runner', label: 'GOLA Audit Runner', icon: PlayCircle },
             { id: 'guide', label: "User's Guide", icon: BookOpen },
+            { id: 'admin-guide', label: "Admin Guide", icon: FileText },
             { id: 'standards', label: 'Engineered Standards', icon: ClipboardList },
         ]
     }
@@ -161,19 +162,6 @@ export function Sidebar({
                     {/* Navigation Links */}
                     <div className="flex flex-col gap-1 mt-4 w-full flex-1 overflow-y-auto overflow-x-hidden min-h-0 pr-2 pb-4 scrollbar-thin scrollbar-thumb-slate-700">
                         {NAVIGATION_ITEMS.map((item) => renderItem(item))}
-                    </div>
-                </div>
-
-                {/* System Status Footer */}
-                <div className="p-2 xl:p-4 bg-slate-800 rounded-xl flex flex-col items-center xl:items-start w-full mt-auto shrink-0 z-10">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 hidden xl:block">System Status</p>
-                    <div className="flex items-center gap-2 mb-1" title="Sync: Active">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></div>
-                        <span className="text-xs font-medium text-slate-200 hidden xl:inline">Sync: Active</span>
-                    </div>
-                    <div className="flex items-center gap-2" title="Server: Online">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
-                        <span className="text-xs font-medium text-slate-200 hidden xl:inline">Server: Online</span>
                     </div>
                 </div>
             </div>

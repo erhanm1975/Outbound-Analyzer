@@ -27,7 +27,7 @@ export function RichTooltip({ content, children, className, trigger, style }: Ri
             const viewportWidth = window.innerWidth;
 
             // Vertical: flip to bottom if too close to top
-            const newPlacement = rect.top < 150 ? 'bottom' : 'top';
+            const newPlacement = rect.top < 280 ? 'bottom' : 'top';
             setPlacement(newPlacement);
 
             // Horizontal: center on trigger, then clamp to viewport

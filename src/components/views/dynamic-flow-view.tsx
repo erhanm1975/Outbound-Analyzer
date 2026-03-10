@@ -1,9 +1,12 @@
 import { format } from 'date-fns';
-import { type FlowDetailData, type ShiftRecord, type IntervalData } from '../../types';
-import { Activity, Users, Clock, Timer, BarChart3 } from 'lucide-react';
+import { type FlowDetailData, type ShiftRecord } from '../../types';
+import { bucketRecords, type ExtendedFlowData, type ExtendedIntervalData, type IntervalOption } from '../../logic/flow-utils';
+import { Activity, Users, Clock, Timer, BarChart3, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { extractInitials } from '../../lib/utils';
 import { useState, useMemo } from 'react';
 import { TIME } from '../../config/constants';
+import { useHelp } from '../../contexts/help-context';
+import { FlowAuditGuide } from '../guide/flow-audit-guide';
 
 interface ProcessData {
     data: FlowDetailData;
@@ -19,10 +22,10 @@ interface DynamicFlowViewProps {
         packing?: ProcessData;
     };
 }
-
 type ProcessKey = 'picking' | 'sorting' | 'packing';
-type IntervalOption = 15 | 30 | 60;
+
 type MetricMode = 'volume' | 'tasks';
+type SortField = 'User' | 'Avg UPH' | 'Total' | 'Active';
 
 const PROCESS_LABELS: Record<ProcessKey, string> = {
     picking: 'Picking',
@@ -36,91 +39,14 @@ const PROCESS_FILTERS: Record<ProcessKey, string> = {
     packing: 'packing',
 };
 
-interface ExtendedIntervalData extends IntervalData {
-    taskCount: number;
-    userTasks: Record<string, number>;
-}
-
-interface ExtendedFlowData {
-    intervals: ExtendedIntervalData[];
-    allUsers: string[];
-}
-
-function bucketRecords(records: ShiftRecord[], intervalMin: IntervalOption): ExtendedFlowData {
-    if (records.length === 0) return { intervals: [], allUsers: [] };
-
-    let minTime = Infinity;
-    let maxTime = -Infinity;
-    for (let i = 0; i < records.length; i++) {
-        const s = records[i].Start.getTime();
-        const f = records[i].Finish.getTime();
-        if (s < minTime) minTime = s;
-        if (f > maxTime) maxTime = f;
-    }
-
-    const bucketSizeMs = intervalMin * TIME.ONE_MINUTE_MS;
-    const buckets: Record<number, {
-        volume: number;
-        taskCount: number;
-        users: Set<string>;
-        userVols: Record<string, number>;
-        userTasks: Record<string, number>;
-    }> = {};
-
-    for (let t = minTime - (minTime % bucketSizeMs); t <= maxTime; t += bucketSizeMs) {
-        buckets[t] = { volume: 0, taskCount: 0, users: new Set(), userVols: {}, userTasks: {} };
-    }
-
-    const distinctUsers = new Set<string>();
-
-    records.forEach(r => {
-        distinctUsers.add(r.User);
-        const recordTime = r.Finish.getTime();
-        const bucketStart = recordTime - (recordTime % bucketSizeMs);
-
-        if (!buckets[bucketStart]) {
-            buckets[bucketStart] = { volume: 0, taskCount: 0, users: new Set(), userVols: {}, userTasks: {} };
-        }
-        buckets[bucketStart].volume += r.Quantity;
-        buckets[bucketStart].taskCount += 1;
-        buckets[bucketStart].users.add(r.User);
-
-        if (!buckets[bucketStart].userVols[r.User]) buckets[bucketStart].userVols[r.User] = 0;
-        buckets[bucketStart].userVols[r.User] += r.Quantity;
-
-        if (!buckets[bucketStart].userTasks[r.User]) buckets[bucketStart].userTasks[r.User] = 0;
-        buckets[bucketStart].userTasks[r.User] += 1;
-    });
-
-    const multiplier = 60 / intervalMin;
-    const sortedTimes = Object.keys(buckets).map(Number).sort((a, b) => a - b);
-
-    const intervals: ExtendedIntervalData[] = sortedTimes.map(t => {
-        const b = buckets[t];
-        const activeUsers = b.users.size;
-        let rate = 0;
-        if (activeUsers > 0 && b.volume > 0) {
-            rate = Math.round((b.volume / activeUsers) * multiplier);
-        }
-        return {
-            intervalStart: new Date(t),
-            intervalEnd: new Date(t + bucketSizeMs),
-            volume: b.volume,
-            taskCount: b.taskCount,
-            activeUserCount: activeUsers,
-            rate,
-            users: b.userVols,
-            userTasks: b.userTasks,
-        };
-    });
-
-    return { intervals, allUsers: Array.from(distinctUsers).sort() };
-}
 
 export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps) {
+    const { openHelp } = useHelp();
     const [selectedProcess, setSelectedProcess] = useState<ProcessKey>('picking');
     const [intervalMin, setIntervalMin] = useState<IntervalOption>(30);
     const [metricMode, setMetricMode] = useState<MetricMode>('volume');
+    const [sortField, setSortField] = useState<SortField>('Total');
+    const [sortDesc, setSortDesc] = useState(true);
 
     // Available processes
     const availableProcesses = (Object.keys(PROCESS_LABELS) as ProcessKey[]).filter(
@@ -141,26 +67,21 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
         return bucketRecords(filteredRecords, intervalMin);
     }, [filteredRecords, intervalMin]);
 
-    // Calculate dynamic UPH (always based on volume)
-    const dynamicUPH = useMemo(() => {
-        const multiplier = 60 / intervalMin;
-        let totalRate = 0;
-        let validCount = 0;
-        dynamicData.intervals.forEach(i => {
-            if (i.volume > 0 && i.activeUserCount > 0) {
-                totalRate += Math.round((i.volume / i.activeUserCount) * multiplier);
-                validCount++;
-            }
-        });
-        return validCount > 0 ? Math.round(totalRate / validCount) : 0;
-    }, [dynamicData, intervalMin]);
-
     const { avgTaskDuration } = current;
     const processName = PROCESS_LABELS[selectedProcess];
+    const score = current.score;
     const data = dynamicData;
-    const score = dynamicUPH;
     const isVolume = metricMode === 'volume';
     const metricLabel = isVolume ? 'Volume' : 'Tasks';
+
+    const handleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortDesc(!sortDesc);
+        } else {
+            setSortField(field);
+            setSortDesc(true);
+        }
+    };
 
     const sortedIntervals = [...data.intervals].sort((a, b) => a.intervalStart.getTime() - b.intervalStart.getTime());
 
@@ -181,7 +102,8 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
         });
     });
 
-    // Per-user totals
+    // Per-user totals + per-user Avg Flow UPH (always hourly)
+    const multiplier = 60 / intervalMin;
     const userTotals = data.allUsers.map(user => {
         let total = 0;
         let activeIntervals = 0;
@@ -190,10 +112,34 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
             total += val;
             if (val > 0) activeIntervals++;
         });
-        return { user, total, activeIntervals };
-    }).sort((a, b) => b.total - a.total);
+        const avgFlowUPH = activeIntervals > 0
+            ? Math.round((total / activeIntervals) * multiplier)
+            : 0;
+        return { user, total, activeIntervals, avgFlowUPH };
+    }).sort((a, b) => {
+        let cmp = 0;
+        if (sortField === 'User') cmp = a.user.localeCompare(b.user);
+        else if (sortField === 'Avg UPH') cmp = a.avgFlowUPH - b.avgFlowUPH;
+        else if (sortField === 'Total') cmp = a.total - b.total;
+        else if (sortField === 'Active') cmp = a.activeIntervals - b.activeIntervals;
+        return sortDesc ? -cmp : cmp;
+    });
+
+    // Shift-level Avg Flow UPH = average of all per-user hourly UPH values
+    const activeUsers = userTotals.filter(u => u.activeIntervals > 0);
+    const shiftAvgFlowUPH = activeUsers.length > 0
+        ? Math.round(activeUsers.reduce((acc, u) => acc + u.avgFlowUPH, 0) / activeUsers.length)
+        : 0;
 
     const totalMetric = sortedIntervals.reduce((acc, i) => acc + getCellVal(i), 0);
+
+
+
+    // Prepare simple single-process array for Recharts (User Flow tab header stats)
+    const chartData = sortedIntervals.map(interval => ({
+        time: format(interval.intervalStart, 'HH:mm'),
+        value: getCellVal(interval)
+    }));
 
     return (
         <div className="space-y-6 p-6 bg-[#0F1115] min-h-full text-slate-300">
@@ -202,11 +148,20 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
                 <div>
                     <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                         <Activity className="w-6 h-6 text-blue-500" />
-                        {processName} Flow Audit
+                        Flow Audit
                     </h2>
-                    <p className="text-sm text-slate-500 mt-1">
-                        {intervalMin}-minute intervals · {metricLabel} heatmap
-                    </p>
+                    <div className="flex items-center gap-4 mt-1">
+                        <p className="text-sm text-slate-500">
+                            {intervalMin}-minute intervals · {metricLabel} heatmap
+                        </p>
+                        <button
+                            onClick={() => openHelp(<FlowAuditGuide />)}
+                            className="flex items-center gap-2 px-3 py-1 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-medium transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-[14px]">menu_book</span>
+                            Open Guide
+                        </button>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
                     {avgTaskDuration !== undefined && (
@@ -215,12 +170,10 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
                             <span className="text-xl font-bold font-mono text-white">{avgTaskDuration} <span className="text-xs font-normal text-slate-500">min</span></span>
                         </div>
                     )}
-                    {score !== undefined && (
-                        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white px-5 py-3 rounded-xl shadow-lg shadow-blue-900/30 flex flex-col items-center min-w-[120px]">
-                            <span className="text-[10px] font-medium opacity-80 uppercase tracking-wider">Flow UPH</span>
-                            <span className="text-2xl font-bold">{score}</span>
-                        </div>
-                    )}
+                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white px-5 py-3 rounded-xl shadow-lg shadow-blue-900/30 flex flex-col items-center min-w-[120px]">
+                        <span className="text-[10px] font-medium opacity-80 uppercase tracking-wider">Shift Avg UPH</span>
+                        <span className="text-2xl font-bold">{shiftAvgFlowUPH}</span>
+                    </div>
                     <div className="bg-[#15171B] border border-slate-800 text-slate-300 px-5 py-3 rounded-xl flex flex-col items-center min-w-[120px]">
                         <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider flex items-center gap-1"><Users className="w-3 h-3" /> Total {metricLabel}</span>
                         <span className="text-xl font-bold font-mono text-white">{totalMetric.toLocaleString()}</span>
@@ -263,7 +216,6 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
                     ))}
                 </div>
 
-                {/* Metric Toggle */}
                 <div className="flex items-center gap-1 bg-[#1A1D21] p-1 rounded-lg border border-slate-800">
                     <BarChart3 className="w-3.5 h-3.5 text-slate-500 ml-2" />
                     {(['volume', 'tasks'] as MetricMode[]).map(mode => (
@@ -281,20 +233,35 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
                 </div>
             </div>
 
-            {/* Matrix Table */}
-            <div className="bg-[#15171B] border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+            {/* User Matrix Content */}
+            <div className="bg-[#15171B] border border-slate-800 rounded-xl overflow-hidden shadow-xl mt-4">
                 <div className="overflow-auto max-h-[calc(100vh-340px)]">
                     <table className="w-full text-xs border-collapse">
                         <thead className="bg-[#1A1D21] sticky top-0 z-10 text-slate-400 uppercase font-bold tracking-wider">
                             <tr>
-                                <th className="p-3 border-b border-r border-slate-700 text-left min-w-[180px] sticky left-0 z-20 bg-[#1A1D21]">
-                                    User
+                                <th className="p-3 border-b border-r border-slate-700 text-left min-w-[180px] sticky left-0 z-20 bg-[#1A1D21] hover:bg-slate-800 transition-colors cursor-pointer" onClick={() => handleSort('User')}>
+                                    <div className="flex items-center gap-1 group">
+                                        User
+                                        {sortField === 'User' ? (sortDesc ? <ArrowDown className="w-3 h-3 text-emerald-400" /> : <ArrowUp className="w-3 h-3 text-emerald-400" />) : <ArrowUpDown className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                                    </div>
                                 </th>
-                                <th className="p-3 border-b border-r border-slate-700 text-right min-w-[70px] bg-[#1A1D21]">
-                                    Total
+                                <th className="p-3 border-b border-r border-slate-700 text-right min-w-[80px] bg-[#1A1D21] hover:bg-slate-800 transition-colors cursor-pointer" onClick={() => handleSort('Avg UPH')}>
+                                    <div className="flex items-center justify-end gap-1 group">
+                                        Avg UPH
+                                        {sortField === 'Avg UPH' ? (sortDesc ? <ArrowDown className="w-3 h-3 text-emerald-400" /> : <ArrowUp className="w-3 h-3 text-emerald-400" />) : <ArrowUpDown className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                                    </div>
                                 </th>
-                                <th className="p-3 border-b border-r border-slate-700 text-right min-w-[50px] bg-[#1A1D21]">
-                                    Active
+                                <th className="p-3 border-b border-r border-slate-700 text-right min-w-[70px] bg-[#1A1D21] hover:bg-slate-800 transition-colors cursor-pointer" onClick={() => handleSort('Total')}>
+                                    <div className="flex items-center justify-end gap-1 group">
+                                        Total
+                                        {sortField === 'Total' ? (sortDesc ? <ArrowDown className="w-3 h-3 text-emerald-400" /> : <ArrowUp className="w-3 h-3 text-emerald-400" />) : <ArrowUpDown className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                                    </div>
+                                </th>
+                                <th className="p-3 border-b border-r border-slate-700 text-right min-w-[50px] bg-[#1A1D21] hover:bg-slate-800 transition-colors cursor-pointer" onClick={() => handleSort('Active')}>
+                                    <div className="flex items-center justify-end gap-1 group">
+                                        Active
+                                        {sortField === 'Active' ? (sortDesc ? <ArrowDown className="w-3 h-3 text-emerald-400" /> : <ArrowUp className="w-3 h-3 text-emerald-400" />) : <ArrowUpDown className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                                    </div>
                                 </th>
                                 {sortedIntervals.map((interval, idx) => (
                                     <th key={idx} className="p-2 border-b border-slate-700 text-center min-w-[55px] whitespace-nowrap">
@@ -314,6 +281,9 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
                                         <span>All Users</span>
                                     </div>
                                 </td>
+                                <td className="p-3 border-r border-slate-700 text-right font-mono text-indigo-400 font-bold">
+                                    {shiftAvgFlowUPH}
+                                </td>
                                 <td className="p-3 border-r border-slate-700 text-right font-mono text-blue-400">
                                     {totalMetric.toLocaleString()}
                                 </td>
@@ -330,26 +300,10 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
                                 })}
                             </tr>
 
-                            {/* UPH Row */}
-                            <tr className="bg-[#12141a] border-b-2 border-slate-700">
-                                <td className="p-3 border-r border-slate-700 text-slate-500 italic sticky left-0 z-10 bg-[#12141a]">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] uppercase tracking-wider">UPH (Annualized)</span>
-                                    </div>
-                                </td>
-                                <td className="p-3 border-r border-slate-700 text-right font-mono text-indigo-400 font-bold">
-                                    {score || '-'}
-                                </td>
-                                <td className="p-3 border-r border-slate-700"></td>
-                                {sortedIntervals.map((interval, idx) => (
-                                    <td key={idx} className="p-2 text-center font-mono text-indigo-400 text-[10px]">
-                                        {interval.rate > 0 ? interval.rate : <span className="text-slate-700">·</span>}
-                                    </td>
-                                ))}
-                            </tr>
+
 
                             {/* User Rows */}
-                            {userTotals.map(({ user, total, activeIntervals }) => (
+                            {userTotals.map(({ user, total, activeIntervals, avgFlowUPH }) => (
                                 <tr key={user} className="hover:bg-slate-800/30 transition-colors">
                                     <td className="p-3 border-r border-slate-700 sticky left-0 z-10 bg-[#15171B]">
                                         <div className="flex items-center gap-2">
@@ -358,6 +312,9 @@ export function DynamicFlowView({ rawRecords, processes }: DynamicFlowViewProps)
                                             </div>
                                             <span className="text-slate-300 font-medium truncate max-w-[120px]" title={user}>{user}</span>
                                         </div>
+                                    </td>
+                                    <td className="p-3 border-r border-slate-700 text-right font-mono font-bold text-indigo-400">
+                                        {avgFlowUPH > 0 ? avgFlowUPH : <span className="text-slate-700">0</span>}
                                     </td>
                                     <td className="p-3 border-r border-slate-700 text-right font-mono font-bold text-white">
                                         {total > 0 ? total.toLocaleString() : <span className="text-slate-700">0</span>}

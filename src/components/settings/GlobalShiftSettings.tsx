@@ -26,6 +26,28 @@ export function GlobalShiftSettings({ params, onChange }: Props) {
     const totalRatio = (params.pickingTravelRatio + params.pickingDirectRatio).toFixed(2);
     const isValidRatio = Math.abs(parseFloat(totalRatio) - 1.0) < 0.01;
 
+    // AI MATURITY WEIGHTS VALIDATION
+    const totalMaturityWeight = (
+        (params.aiMaturityWeights?.p1 || 0) +
+        (params.aiMaturityWeights?.p2 || 0) +
+        (params.aiMaturityWeights?.p3 || 0) +
+        (params.aiMaturityWeights?.p4 || 0) +
+        (params.aiMaturityWeights?.p5 || 0)
+    ).toFixed(2);
+    const isValidMaturityWeight = Math.abs(parseFloat(totalMaturityWeight) - 1.0) < 0.01;
+
+    const handleWeightChange = (phase: keyof GlobalShiftParams['aiMaturityWeights'], value: string) => {
+        const numValue = parseFloat(value);
+        if (isNaN(numValue)) return;
+        onChange({
+            ...params,
+            aiMaturityWeights: {
+                ...(params.aiMaturityWeights || { p1: 0.4, p2: 0.2, p3: 0.15, p4: 0.1, p5: 0.15 }),
+                [phase]: numValue
+            }
+        });
+    };
+
     return (
         <div className="space-y-4 p-4 bg-slate-50 dark:bg-[#111418] rounded-lg border border-slate-200 dark:border-slate-800">
             <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Global Shift Parameters</h3>
@@ -93,6 +115,37 @@ export function GlobalShiftSettings({ params, onChange }: Props) {
                     <span>Ratio Mismatch: Sum is {totalRatio}, must be 1.00</span>
                 </div>
             )}
+
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-6 mt-6">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4">Unified AI Maturity Score Weightings</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {[1, 2, 3, 4, 5].map((phaseNum) => {
+                        const key = `p${phaseNum}` as keyof GlobalShiftParams['aiMaturityWeights'];
+                        const val = params.aiMaturityWeights?.[key] ?? 0;
+                        return (
+                            <div key={key}>
+                                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Phase {phaseNum} Weight (0-1)</label>
+                                <input
+                                    type="number"
+                                    step="0.05"
+                                    max="1"
+                                    min="0"
+                                    value={val}
+                                    onChange={(e) => handleWeightChange(key, e.target.value)}
+                                    className={`w-full px-3 py-2 border rounded text-sm bg-white dark:bg-[#0b0d10] text-slate-900 dark:text-slate-100 focus:ring-2 outline-none ${!isValidMaturityWeight ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-800 focus:ring-blue-500'}`}
+                                />
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {!isValidMaturityWeight && (
+                    <div className="flex items-center gap-2 text-rose-600 text-xs mt-4 bg-rose-50 dark:bg-rose-900/20 p-2 rounded">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Weight Mismatch: Phase weights sum to {totalMaturityWeight}, must be exactly 1.00 (100%).</span>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

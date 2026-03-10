@@ -142,11 +142,30 @@ export function ConfigPanel({ config, onChange, suggestedBuffer, visibleSections
                 <div className="space-y-2">
                     <SectionHeader id="global" title="A. Global Shift Parameters" icon={Settings} />
                     {openSections['global'] && localConfig.globalShiftParams && (
-                        <div className="animate-in slide-in-from-top-2 duration-200">
+                        <div className="animate-in slide-in-from-top-2 duration-200 space-y-4">
                             <GlobalShiftSettings
                                 params={localConfig.globalShiftParams}
                                 onChange={handleGlobalChange}
                             />
+                            <div className="p-4 bg-slate-50 dark:bg-[#111418] rounded-lg border border-slate-200 dark:border-slate-800">
+                                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Financial Parameters</h3>
+                                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                            Default Hourly Wage ($)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.5"
+                                            value={localConfig.hourlyWage ?? 22}
+                                            onChange={(e) => handleChange('hourlyWage', e.target.value)}
+                                            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-800 rounded-lg text-sm bg-white dark:bg-[#0b0d10] text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                        <p className="text-[10px] text-slate-500 mt-1">Used to calculate Financial Friction (Payroll Bleed) across dashboards.</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

@@ -2,12 +2,15 @@ import { type EnrichedShiftRecord } from '../../types';
 import { Table, ArrowDown, ArrowUp, Search, Filter, AlertTriangle } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
+import { useHelp } from '../../contexts/help-context';
+import { ShiftDetailsGuide } from '../guide/shift-details-guide';
 
 interface ShiftDetailViewProps {
     data: EnrichedShiftRecord[];
 }
 
 export function ShiftDetailView({ data }: ShiftDetailViewProps) {
+    const { openHelp } = useHelp();
     const [sortField, setSortField] = useState<keyof EnrichedShiftRecord>('Start');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
     const [page, setPage] = useState(1);
@@ -71,17 +74,28 @@ export function ShiftDetailView({ data }: ShiftDetailViewProps) {
         <div className="bg-[#111418] rounded-xl border border-slate-800 shadow-sm flex flex-col h-full overflow-hidden">
             {/* Header & Controls */}
             <div className="p-4 border-b border-slate-800 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-[#151b23]">
-                <div className="space-y-1">
-                    <h3 className="font-bold text-slate-100 flex items-center gap-2">
-                        <Table className="w-4 h-4 text-slate-400" />
-                        Shift Details Database
-                    </h3>
-                    <div className="text-slate-400 text-xs">
-                        Showing {filteredData.length} of {data.length} records
+                <div className="flex items-start justify-between w-full xl:w-auto">
+                    <div className="space-y-1">
+                        <h3 className="font-bold text-slate-100 flex items-center gap-2">
+                            <Table className="w-4 h-4 text-slate-400" />
+                            Shift Details Database
+                        </h3>
+                        <div className="text-slate-400 text-xs">
+                            Showing {filteredData.length} of {data.length} records
+                        </div>
                     </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
+                    {/* Guide Trigger */}
+                    <button
+                        onClick={() => openHelp(<ShiftDetailsGuide />)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/30 rounded-lg text-xs font-medium transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[14px]">menu_book</span>
+                        Open Guide
+                    </button>
+
                     {/* Search by User */}
                     <div className="relative">
                         <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />

@@ -94,9 +94,10 @@ const PHASE_DEFINITIONS = [
             'Job Type Selection: Deploying Identical Item, Single Item, and Multi-Item batching.',
             'Normalization of Wave Scheduling: Transitioning from "too many small waves" to optimized intervals.',
             'Batch Size Optimization: Correcting equipment under-utilization.',
-            'AI Adoption Discipline: Minimizing manual "top-off" waves.'
+            'AI Adoption Discipline: Minimizing manual "top-off" waves.',
+            'AI Job Creation Discipline: Ensuring jobs are AI-generated rather than manually created.'
         ],
-        metrics: ['Picked UPH / Packed UPH', 'Distinct Locations Visited', 'Density (Locs/Unit)']
+        metrics: ['Picked UPH / Packed UPH', 'Distinct Locations Visited', 'Density (Locs/Unit)', 'AI-Generated Order Ratio']
     },
     {
         id: 'P2',

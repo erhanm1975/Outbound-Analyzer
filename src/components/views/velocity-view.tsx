@@ -1,21 +1,32 @@
-import { METRIC_TOOLTIPS } from '../../logic/metric-definitions';
+import { METRIC_TOOLTIPS, RichTooltipContainer } from '../../logic/metric-definitions';
 import { RichTooltip } from '../ui/rich-tooltip';
 import React, { useMemo } from 'react';
-import type { AnalysisResult } from '../../types';
+import type { AnalysisResult, ShiftRecord } from '../../types';
+import { useHelp } from '../../contexts/help-context';
+import { VelocityGuide } from '../guide/velocity-guide';
+import { format } from 'date-fns';
+import { bucketRecords, type ExtendedFlowData } from '../../logic/flow-utils';
+import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 interface Props {
     analysis: AnalysisResult;
     benchmark?: AnalysisResult;
     isLive?: boolean;
+    rawRecords?: ShiftRecord[];
 }
 
-export function VelocityView({ analysis, benchmark, isLive = false }: Props) {
+export function VelocityView({ analysis, benchmark, isLive = false, rawRecords = [] }: Props) {
+    const { openHelp } = useHelp();
+    const handleOpenGuide = (id: string) => {
+        openHelp(<VelocityGuide scrollToId={id} />);
+    };
     const { stats, health } = analysis;
     // Calculated Metrics
     const productiveUPH = stats.productiveUPH || 0;
     const flowVelocity = stats.uph || 0;
     const floorUPH = stats.floorUPH || 0;
     const outputDensity = stats.outputDensity || 0;
+    const shiftAvgFlowUPH = stats.picking.shiftAvgFlowUPH || 0; // NEW
 
     // Targets (Dynamic Benchmark)
     const benchmarkStats = benchmark?.stats;
@@ -32,6 +43,44 @@ export function VelocityView({ analysis, benchmark, isLive = false }: Props) {
     const packTimeStr = formatDuration(stats.packing.avgProcessTimeSec);
     const breakTimeStr = formatDuration(0);
 
+    // Flow Audit Chart Data (Facility Output by Process (Volume) - Hourly Intervals)
+    // We default to 60 minute intervals and volume mode as requested.
+    const consolidatedChartData = useMemo(() => {
+        if (!rawRecords || rawRecords.length === 0) return [];
+
+        const PROCESS_FILTERS = { picking: 'picking', sorting: 'sort', packing: 'packing' };
+
+        const pickRecs = rawRecords.filter(r => (r.TaskType || '').toLowerCase().includes(PROCESS_FILTERS.picking));
+        const sortRecs = rawRecords.filter(r => (r.TaskType || '').toLowerCase().includes(PROCESS_FILTERS.sorting));
+        const packRecs = rawRecords.filter(r => (r.TaskType || '').toLowerCase().includes(PROCESS_FILTERS.packing));
+
+        const pickData = bucketRecords(pickRecs, 60);
+        const sortData = bucketRecords(sortRecs, 60);
+        const packData = bucketRecords(packRecs, 60);
+
+        const allTimes = new Map<string, { time: string; pick: number; sort: number; pack: number; total?: number }>();
+
+        const addIntervals = (data: ExtendedFlowData, key: 'pick' | 'sort' | 'pack') => {
+            data.intervals.forEach(interval => {
+                const t = format(interval.intervalStart, 'HH:mm');
+                if (!allTimes.has(t)) allTimes.set(t, { time: t, pick: 0, sort: 0, pack: 0 });
+                const entry = allTimes.get(t)!;
+                entry[key] = interval.volume;
+            });
+        };
+
+        addIntervals(pickData, 'pick');
+        addIntervals(sortData, 'sort');
+        addIntervals(packData, 'pack');
+
+        return [...allTimes.values()]
+            .map(entry => {
+                entry.total = entry.pick + entry.sort + entry.pack;
+                return entry;
+            })
+            .sort((a, b) => a.time.localeCompare(b.time));
+    }, [rawRecords]);
+
     return (
         <div className="h-full flex flex-col gap-6 p-6 overflow-y-auto">
             <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-2 border-b border-white/5">
@@ -42,6 +91,14 @@ export function VelocityView({ analysis, benchmark, isLive = false }: Props) {
 
                 {/* Controls Mockup */}
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => openHelp(<VelocityGuide />)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded-lg text-sm font-medium transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[18px]">menu_book</span>
+                        Open Guide
+                    </button>
+
                     <div className="hidden md:flex items-center px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-400">
                         {isLive ? (
                             <>
@@ -56,80 +113,176 @@ export function VelocityView({ analysis, benchmark, isLive = false }: Props) {
                         )}
                     </div>
                 </div>
-            </header >
+            </header>
 
             <section className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
 
-                {/* LEFT: Productive Picked UPH */}
+                {/* LEFT COLUMN: Productive Picked UPH & Efficiency Score */}
                 <div className="xl:col-span-3 h-full flex flex-col gap-6">
-                    <div className="glass-panel metric-mesh-blue rounded-xl p-6 relative overflow-visible group hover:border-blue-500/40 transition-all duration-300 transform hover:-translate-y-1 h-full flex flex-col justify-center bg-slate-900/40 backdrop-blur-md border border-white/10 shadow-xl">
-                        <div className="flex justify-between items-start mb-4">
+                    {/* Productive Picked UPH */}
+                    <div className="glass-panel metric-mesh-blue rounded-xl p-6 relative overflow-visible group hover:border-blue-500/40 transition-all duration-300 transform hover:-translate-y-1 flex-1 flex flex-col justify-center bg-slate-900/40 backdrop-blur-md border border-white/10 shadow-xl">
+                        <div className="flex justify-between items-start mb-2">
                             <div className="flex items-center gap-3">
-                                <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500 shadow-inner shadow-blue-500/5">
-                                    <span className="material-symbols-outlined text-3xl">bolt</span>
-                                </div>
+                                <button onClick={() => handleOpenGuide('productive-picked-uph')} className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 shadow-inner shadow-blue-500/5 hover:bg-blue-500/20 hover:scale-105 transition-all cursor-pointer" title="Read about Productive Picked UPH in the User Guide">
+                                    <span className="material-symbols-outlined text-2xl">bolt</span>
+                                </button>
                                 <div>
-                                    <p className="text-white text-lg font-semibold">Productive Picked UPH</p>
+                                    <p className="text-white text-base font-semibold">Productive Picked UPH</p>
+                                    <p className="text-slate-400 text-[11px] mt-0.5 font-medium tracking-wide">Average UPH per Picker (Excluding Breaks)</p>
                                 </div>
                             </div>
                             {/* Tooltip Trigger */}
-                            <RichTooltip content={METRIC_TOOLTIPS.PRODUCTIVE_UPH} align="center">
+                            <RichTooltip content={METRIC_TOOLTIPS.PRODUCTIVE_UPH}>
                                 <span className="material-symbols-outlined text-slate-500 hover:text-white cursor-help text-sm">info</span>
                             </RichTooltip>
                         </div>
 
-                        <div className="mb-4 mt-2">
+                        <div className="mb-2 mt-2">
                             <div className="flex items-baseline gap-2 flex-wrap">
-                                <h3 className="text-6xl font-bold text-white tracking-tight tabular-nums">{productiveUPH.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
-                                <span className="text-xs text-slate-500 font-mono">UNITS/HR</span>
+                                <h3 className="text-5xl font-bold text-white tracking-tight tabular-nums">{productiveUPH.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                                <span className="text-[10px] text-slate-500 font-mono">UNITS/HR</span>
                             </div>
                             {targetProductive !== undefined && (
-                                <TrendBadge value={productiveUPH} target={targetProductive} color="emerald" />
+                                <TrendBadge value={productiveUPH} target={targetProductive} color="emerald" small />
                             )}
                         </div>
 
                         {targetProductive !== undefined && (
-                            <ProgressBar value={productiveUPH} max={targetProductive * 1.2} color="blue" />
+                            <ProgressBar value={productiveUPH} max={targetProductive * 1.2} color="blue" small />
                         )}
 
                         {targetProductive !== undefined && (
-                            <div className="flex justify-between text-sm mt-3">
+                            <div className="flex justify-between text-xs mt-2">
                                 <span className="text-slate-500">Benchmark: <span className="text-slate-300 font-mono">{targetProductive.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Efficiency Score (Utilization) */}
+                    <div className="glass-panel metric-mesh-cyan rounded-xl p-6 relative overflow-visible group hover:border-cyan-500/40 transition-all duration-300 transform hover:-translate-y-1 flex-1 flex flex-col justify-center bg-slate-900/40 backdrop-blur-md border border-white/10 shadow-xl">
+                        <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => handleOpenGuide('efficiency-score-utilization')} className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-500 shadow-inner shadow-cyan-500/5 hover:bg-cyan-500/20 hover:scale-105 transition-all cursor-pointer" title="Read about Efficiency Score in the User Guide">
+                                    <span className="material-symbols-outlined text-2xl">speed</span>
+                                </button>
+                                <div>
+                                    <p className="text-white text-base font-semibold">Efficiency Score</p>
+                                    <p className="text-slate-400 text-[11px] mt-0.5 font-medium tracking-wide">Facility-Wide Utilization Percentage</p>
+                                </div>
+                            </div>
+                            {/* Tooltip */}
+                            <RichTooltip content={
+                                <RichTooltipContainer
+                                    title="Efficiency Score"
+                                    description="Percentage of shift time spent on active work vs. idle/gap time."
+                                    formula="(Active Wall Clock Time / Total Shift Span) * 100"
+                                    example={
+                                        <p>A warehouse operates a 10-hour shift (600 minutes). Across all pickers, they spend 90 minutes on break, 30 minutes idle, and 480 minutes actively picking. The Facility Efficiency Score is 80% (480 / 600).</p>
+                                    }
+                                />
+                            }>
+                                <span className="material-symbols-outlined text-slate-500 hover:text-white cursor-help text-sm">info</span>
+                            </RichTooltip>
+                        </div>
+
+                        <div className="mb-2 mt-2">
+                            <div className="flex items-baseline gap-2 flex-wrap">
+                                <h3 className="text-5xl font-bold text-white tracking-tight tabular-nums">{Math.round(stats.utilization)}</h3>
+                                <span className="text-[10px] text-slate-500 font-mono">%</span>
+                            </div>
+                            {benchmarkStats?.utilization !== undefined && (
+                                <TrendBadge value={stats.utilization} target={benchmarkStats.utilization} color="emerald" small />
+                            )}
+                        </div>
+
+                        {benchmarkStats?.utilization !== undefined && (
+                            <ProgressBar value={stats.utilization} max={100} color="cyan" small />
+                        )}
+
+                        {benchmarkStats?.utilization !== undefined && (
+                            <div className="flex justify-between text-xs mt-2">
+                                <span className="text-slate-500">Benchmark: <span className="text-slate-300 font-mono">{Math.round(benchmarkStats.utilization)}%</span></span>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* CENTER: Pick Flow Velocity (Hero) */}
-                <div className="xl:col-span-6 flex flex-col h-full">
-                    <div className="hero-panel w-full h-full rounded-2xl p-8 relative overflow-visible group hover:border-cyan-500/50 transition-all duration-500 flex flex-col items-center justify-center min-h-[400px] bg-slate-900/80 backdrop-blur-xl border border-cyan-500/20 shadow-2xl">
+                {/* CENTER: Pick Flow Velocity (Hero) & Avg Flow UPH */}
+                <div className="xl:col-span-6 flex flex-col h-full gap-6">
+                    {/* Pick Velocity */}
+                    <div className="hero-panel w-full rounded-2xl p-6 relative overflow-visible group hover:border-cyan-500/50 transition-all duration-500 flex flex-col items-center justify-center flex-1 bg-slate-900/80 backdrop-blur-xl border border-cyan-500/20 shadow-2xl">
                         <div className="absolute inset-0 bg-hero-glow pointer-events-none overflow-hidden rounded-2xl"></div>
                         <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none"><div className="absolute top-0 right-0 p-32 bg-cyan-500/5 rounded-full blur-3xl group-hover:bg-cyan-500/10 transition-colors"></div></div>
 
-                        <div className="relative z-10 text-center flex flex-col items-center justify-center flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                                <h2 className="text-slate-400 text-lg font-medium tracking-[0.2em] uppercase">Pick Flow Velocity</h2>
-                                <RichTooltip content={METRIC_TOOLTIPS.UPH_HOURLY_AVG} align="center">
+                        <div className="absolute top-6 left-6 z-20">
+                            <button onClick={() => handleOpenGuide('pick-flow-velocity')} className="p-2 rounded-xl bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 shadow-inner shadow-cyan-500/5 hover:bg-cyan-500/20 hover:scale-105 transition-all cursor-pointer" title="Read about Pick Flow Velocity in the User Guide">
+                                <span className="material-symbols-outlined text-xl">menu_book</span>
+                            </button>
+                        </div>
+
+                        <div className="relative z-10 text-center flex flex-col items-center justify-center flex-1 w-full">
+                            <div className="flex items-center justify-center gap-2 mb-1">
+                                <h2 className="text-slate-300 text-sm font-bold tracking-[0.2em] uppercase">Pick Flow Velocity</h2>
+                                <RichTooltip content={METRIC_TOOLTIPS.UPH_HOURLY_AVG}>
                                     <span className="material-symbols-outlined text-slate-500 hover:text-white cursor-help text-sm">info</span>
                                 </RichTooltip>
                             </div>
+                            <p className="text-cyan-400/80 text-[10px] font-semibold tracking-wider font-mono">AVERAGE UPH PER PICKER (AGGREGATE)</p>
 
-                            <div className="flex items-baseline justify-center gap-2 my-4 scale-110 md:scale-125">
-                                <span className="text-7xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-cyan-400 tracking-tighter tabular-nums drop-shadow-2xl leading-none">
+                            <div className="flex items-baseline justify-center gap-2 my-4">
+                                <span className="text-6xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-cyan-400 tracking-tighter tabular-nums drop-shadow-2xl leading-none">
                                     {flowVelocity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                             </div>
-                            <p className="text-2xl text-slate-300 font-medium mb-10">Facility : Picked Units per Labor Hour</p>
+                            <p className="text-lg text-slate-300 font-medium mb-4">Facility : Units per Labor Hour</p>
 
                             {targetFlow !== undefined && (
-                                <div className="flex items-center gap-8 text-base">
-                                    <div className="flex items-center gap-3 px-6 py-3 rounded-xl bg-slate-900/50 border border-slate-700 shadow-lg">
-                                        <span className="text-slate-500 font-medium">Benchmark</span>
-                                        <span className="font-mono font-bold text-white text-xl">{targetFlow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <div className="flex items-center justify-center gap-6 text-sm">
+                                    <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/50 border border-slate-700 shadow-lg">
+                                        <span className="text-slate-500 font-medium">Target</span>
+                                        <span className="font-mono font-bold text-white text-lg">{targetFlow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
                                     <TrendBadgeLarge value={flowVelocity} target={targetFlow} />
                                 </div>
                             )}
+                        </div>
+                    </div>
+
+                    {/* Lower Center: Avg Flow UPH */}
+                    <div className="hero-panel w-full rounded-2xl p-6 relative overflow-visible group hover:border-indigo-500/50 transition-all duration-500 flex flex-col items-center justify-center flex-1 bg-slate-900/80 backdrop-blur-xl border border-indigo-500/20 shadow-2xl">
+                        <div className="absolute inset-0 bg-hero-glow pointer-events-none overflow-hidden rounded-2xl opacity-50"></div>
+                        <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none"><div className="absolute top-0 right-0 p-32 bg-indigo-500/5 rounded-full blur-3xl group-hover:bg-indigo-500/10 transition-colors"></div></div>
+
+                        <div className="absolute top-6 left-6 z-20">
+                            <button onClick={() => handleOpenGuide('pick-flow-velocity')} className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-inner shadow-indigo-500/5 hover:bg-indigo-500/20 hover:scale-105 transition-all cursor-pointer" title="Read about Average Flow UPH in the User Guide">
+                                <span className="material-symbols-outlined text-xl">menu_book</span>
+                            </button>
+                        </div>
+
+                        <div className="relative z-10 text-center flex flex-col items-center justify-center flex-1 w-full">
+                            <div className="flex items-center justify-center gap-2 mb-1">
+                                <h2 className="text-slate-300 text-sm font-bold tracking-[0.2em] uppercase">Avg Flow UPH</h2>
+                                <RichTooltip content={
+                                    <RichTooltipContainer
+                                        title="Shift Average Flow UPH"
+                                        description="Calculated using strict 15-minute intervals across the shift. This methodology normalizes picking flow into an hourly projection per interval. It ensures that dormant periods across unutilized intervals do not dilute the mathematical pace of the active shift."
+                                        formula="∑ User Avg / Total Active Users"
+                                        example={
+                                            <p>A picker works hard from 8:00 to 9:00, picking 200 units (Interval UPH = 200). Then they go to lunch from 9:00 to 10:00 (Interval UPH = 0). The Shift Avg Flow UPH completely ignores the empty 9:00-10:00 block, protecting the worker's 200 UPH performance limit.</p>
+                                        }
+                                    />
+                                }>
+                                    <span className="material-symbols-outlined text-slate-500 hover:text-white cursor-help text-sm">info</span>
+                                </RichTooltip>
+                            </div>
+                            <p className="text-indigo-400/80 text-[10px] font-semibold tracking-wider font-mono">HOURLY PROJECTION OVER ACTIVE INTERVALS</p>
+
+                            <div className="flex items-baseline justify-center gap-2 my-4">
+                                <span className="text-6xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-indigo-400 tracking-tighter tabular-nums drop-shadow-2xl leading-none">
+                                    {shiftAvgFlowUPH.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </span>
+                            </div>
+                            <p className="text-lg text-slate-300 font-medium">Shift-Level Picker Output Flow</p>
                         </div>
                     </div>
                 </div>
@@ -141,15 +294,16 @@ export function VelocityView({ analysis, benchmark, isLive = false }: Props) {
                     <div className="glass-panel metric-mesh-emerald rounded-xl p-6 relative overflow-visible group hover:border-emerald-500/40 transition-all duration-300 transform hover:-translate-y-1 flex-1 flex flex-col justify-center bg-slate-900/40 backdrop-blur-md border border-white/10 shadow-xl">
                         <div className="flex justify-between items-start mb-2">
                             <div className="flex items-center gap-3">
-                                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 shadow-inner shadow-emerald-500/5">
+                                <button onClick={() => handleOpenGuide('floor-picked-uph')} className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 shadow-inner shadow-emerald-500/5 hover:bg-emerald-500/20 hover:scale-105 transition-all cursor-pointer" title="Read about Floor Picked UPH in the User Guide">
                                     <span className="material-symbols-outlined text-2xl">conveyor_belt</span>
-                                </div>
+                                </button>
                                 <div>
                                     <p className="text-white text-base font-semibold">Floor Picked UPH</p>
+                                    <p className="text-slate-400 text-[11px] mt-0.5 font-medium tracking-wide">Pure Mechanical Task Speed per Picker</p>
                                 </div>
                             </div>
                             {/* Tooltip */}
-                            <RichTooltip content={METRIC_TOOLTIPS.FLOOR_UPH} align="end">
+                            <RichTooltip content={METRIC_TOOLTIPS.FLOOR_UPH}>
                                 <span className="material-symbols-outlined text-slate-500 hover:text-white cursor-help text-sm">info</span>
                             </RichTooltip>
                         </div>
@@ -177,15 +331,16 @@ export function VelocityView({ analysis, benchmark, isLive = false }: Props) {
                     <div className="glass-panel metric-mesh-amber rounded-xl p-6 relative overflow-visible group hover:border-amber-500/40 transition-all duration-300 transform hover:-translate-y-1 flex-1 flex flex-col justify-center bg-slate-900/40 backdrop-blur-md border border-white/10 shadow-xl">
                         <div className="flex justify-between items-start mb-2">
                             <div className="flex items-center gap-3">
-                                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 shadow-inner shadow-amber-500/5">
+                                <button onClick={() => handleOpenGuide('pick-density')} className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 shadow-inner shadow-amber-500/5 hover:bg-amber-500/20 hover:scale-105 transition-all cursor-pointer" title="Read about Pick Density in the User Guide">
                                     <span className="material-symbols-outlined text-2xl">widgets</span>
-                                </div>
+                                </button>
                                 <div>
                                     <p className="text-white text-base font-semibold">Pick Density</p>
+                                    <p className="text-slate-400 text-[11px] mt-0.5 font-medium tracking-wide">Average Units per Location Stop</p>
                                 </div>
                             </div>
                             {/* Tooltip */}
-                            <RichTooltip content={METRIC_TOOLTIPS.OUTPUT_DENSITY} align="end">
+                            <RichTooltip content={METRIC_TOOLTIPS.OUTPUT_DENSITY}>
                                 <span className="material-symbols-outlined text-slate-500 hover:text-white cursor-help text-sm">info</span>
                             </RichTooltip>
                         </div>
@@ -210,6 +365,66 @@ export function VelocityView({ analysis, benchmark, isLive = false }: Props) {
                     </div>
                 </div>
             </section>
+
+            {/* Facility Output by Process (Moved from Flow Audit) */}
+            {consolidatedChartData && consolidatedChartData.length > 0 && (
+                <section className="glass-panel rounded-xl p-8 border-t border-blue-500/20 bg-slate-900/60 backdrop-blur-md">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                                <button onClick={() => handleOpenGuide('facility-output-process')} className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500/20 hover:scale-105 transition-all cursor-pointer flex items-center justify-center" title="Read about Facility Output in the User Guide">
+                                    <span className="material-symbols-outlined text-xl">bar_chart</span>
+                                </button>
+                                Facility Output by Process (Volume)
+                                <RichTooltip content={
+                                    <RichTooltipContainer
+                                        title="Facility Output Process Flow"
+                                        description="Visualizes the absolute number of units processed per hour. The engine synchronizes all timestamped tasks across Pick, Sort, and Pack phases into strict 60-minute intervals."
+                                        formula="Total Units Processed per Phase per Hour"
+                                        example={
+                                            <p>If picking activity spans from 08:15 AM to 09:45 AM yielding 500 units, the engine strictly buckets the volume into the 08:00 AM bar (e.g. 300 units) and the 09:00 AM bar (e.g. 200 units).</p>
+                                        }
+                                    />
+                                }>
+                                    <span className="material-symbols-outlined text-slate-500 hover:text-white cursor-help text-sm ml-1">info</span>
+                                </RichTooltip>
+                            </h2>
+                            <p className="text-slate-400 text-xs mt-1">Aggregated throughput volume in hourly intervals aligned with shift rhythm.</p>
+                        </div>
+                    </div>
+
+                    <div className="h-[280px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={consolidatedChartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }} barGap={2} barCategoryGap="20%">
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                <XAxis
+                                    dataKey="time"
+                                    stroke="#64748b"
+                                    fontSize={12}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    dy={10}
+                                />
+                                <YAxis
+                                    stroke="#64748b"
+                                    fontSize={12}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickFormatter={(val) => val.toLocaleString()}
+                                />
+                                <RechartsTooltip
+                                    cursor={{ fill: '#1e293b', opacity: 0.4 }}
+                                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
+                                />
+                                <Bar dataKey="pick" name="Picking" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="sort" name="Sorting" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="pack" name="Packing" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                                <Line type="monotone" dataKey="total" name="Total Throughput" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} activeDot={{ r: 6 }} />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
+                </section>
+            )}
 
             {/* Timeline Section */}
             <section className="glass-panel rounded-xl p-8 border-t border-blue-500/20 flex-1 flex flex-col bg-slate-900/60 backdrop-blur-md">

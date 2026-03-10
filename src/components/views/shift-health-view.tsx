@@ -1,11 +1,14 @@
 import { Users, Box, MapPin, Globe, Info } from 'lucide-react';
 import { type AnalysisResult } from '../../types';
 import { OrderProfileChart } from '../charts/order-profile-chart';
+import { AvgUnitsCard } from '../charts/avg-units-card';
 import { WorkforceChart } from '../charts/workforce-chart';
 import { JobVolumeChart } from '../charts/job-volume-chart';
 import { WaveVolumeChart } from '../charts/wave-volume-chart';
 import { RichTooltip } from '../ui/rich-tooltip';
 import { METRIC_TOOLTIPS } from '../../logic/metric-definitions';
+import { useHelp } from '../../contexts/help-context';
+
 
 // ... (existing imports)
 
@@ -63,6 +66,8 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
 
             {/* Header Section Removed (Now Global) */}
 
+
+
             {/* KPI Cards Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <StatCard
@@ -102,20 +107,30 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
             {/* Main Dashboard Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
                 {/* 1. Order Profile (Donut) */}
-                <OrderProfileChart
-                    single={health.singleItemOrders}
-                    multi={health.multiItemOrders}
-                    total={health.totalOrders}
-                />
+                <div className="lg:col-span-4 h-full">
+                    <OrderProfileChart
+                        single={health.singleItemOrders}
+                        multi={health.multiItemOrders}
+                        total={health.totalOrders}
+                    />
+                </div>
 
-
+                {/* 2. Order Density (Avg Units) */}
+                <div className="lg:col-span-4 h-full">
+                    <AvgUnitsCard
+                        totalUnits={health.totalUnits}
+                        totalOrders={health.totalOrders}
+                    />
+                </div>
 
                 {/* 3. Workforce (Stacked Cards) */}
-                <WorkforceChart
-                    pickers={health.uniquePickers}
-                    packers={health.uniquePackers}
-                    crossTrained={health.crossTrainedEmployees}
-                />
+                <div className="lg:col-span-4 h-full">
+                    <WorkforceChart
+                        pickers={health.uniquePickers}
+                        packers={health.uniquePackers}
+                        crossTrained={health.crossTrainedEmployees}
+                    />
+                </div>
             </div>
 
             {/* Bottom Row / Job Volume & Wave Volume */}
@@ -123,7 +138,6 @@ export function ShiftHealthView({ analysis }: ShiftHealthViewProps) {
                 <div className="lg:col-span-3">
                     <JobVolumeChart
                         data={jobVolumeData}
-                        efficiencyScore={Math.round(stats.utilization)}
                     />
                 </div>
 
